@@ -56,8 +56,17 @@ jobs:
             blessing-ci:runtime)
           trap 'docker stop "$container" >/dev/null || true' EXIT
           endpoint=$(docker port "$container" 8080/tcp)
-          status=$(curl --retry 12 --retry-connrefused --retry-delay 1 --max-time 5 \
-            -sS -o "$RUNNER_TEMP/blessing-health.txt" -w '%{http_code}' "http://$endpoint/healthz")
+          # The published port accepts connections before the image has finished
+          # starting Apache, so wait for the first answer instead of one try.
+          status=000
+          for attempt in $(seq 1 30); do
+            if status=$(curl --max-time 5 -sS -o "$RUNNER_TEMP/blessing-health.txt" \
+              -w '%{http_code}' "http://$endpoint/healthz"); then
+              break
+            fi
+            status=000
+            sleep 1
+          done
           test "$status" = 503
           grep -Fxq 'Service Unavailable' "$RUNNER_TEMP/blessing-health.txt"
           test "$(curl -sS -o /dev/null -w '%{http_code}' "http://$endpoint/setup")" = 404

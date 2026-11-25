@@ -34,7 +34,7 @@ test('confirmation is not matched', () => {
   fireEvent.click(getByText(t('auth.register')))
 
   expect(queryByText(t('auth.invalidConfirmPwd'))).toBeInTheDocument()
-  expect(fetch.post).not.toBeCalled()
+  expect(fetch.post).not.toHaveBeenCalled()
 })
 
 test('succeeded', async () => {
@@ -60,7 +60,7 @@ test('succeeded', async () => {
   })
   fireEvent.click(getByText(t('auth.register')))
   await waitFor(() =>
-    expect(fetch.post).toBeCalledWith(urls.auth.register(), {
+    expect(fetch.post).toHaveBeenCalledWith(urls.auth.register(), {
       email: 'a@b.c',
       password: 'password',
       nickname: 't',
@@ -95,7 +95,7 @@ test('failed', async () => {
   })
   fireEvent.click(getByText(t('auth.register')))
   await waitFor(() =>
-    expect(fetch.post).toBeCalledWith(urls.auth.register(), {
+    expect(fetch.post).toHaveBeenCalledWith(urls.auth.register(), {
       email: 'a@b.c',
       password: 'password',
       nickname: 't',
@@ -129,7 +129,7 @@ test('register with new player', async () => {
   })
   fireEvent.click(getByText(t('auth.register')))
   await waitFor(() =>
-    expect(fetch.post).toBeCalledWith(urls.auth.register(), {
+    expect(fetch.post).toHaveBeenCalledWith(urls.auth.register(), {
       email: 'a@b.c',
       password: 'password',
       player_name: 'player',

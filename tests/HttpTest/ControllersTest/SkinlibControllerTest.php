@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Models\Player;
 use App\Models\Texture;
 use App\Models\User;
 use Blessing\Rejection;
@@ -11,7 +12,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
-use Intervention\Image\Image;
+use Tests\Support\TextureFixtures;
 
 class SkinlibControllerTest extends TestCase
 {
@@ -140,18 +141,15 @@ class SkinlibControllerTest extends TestCase
         // Invalid texture
         option(['auto_del_invalid_texture' => false]);
         $texture = Texture::factory()->create();
-        $this->get('/skinlib/show/'.$texture->tid)
-            ->assertSee(trans('skinlib.show.deleted'));
+        $this->get('/skinlib/show/'.$texture->tid)->assertNotFound();
         $this->assertNotNull(Texture::find($texture->tid));
 
         option(['auto_del_invalid_texture' => true]);
-        $this->get('/skinlib/show/'.$texture->tid)
-            ->assertSee(trans('skinlib.show.deleted'));
-        $this->assertNull(Texture::find($texture->tid));
+        $this->get('/skinlib/show/'.$texture->tid)->assertNotFound();
+        $this->assertNotNull(Texture::find($texture->tid));
 
         // Show a texture
-        $texture = Texture::factory()->create();
-        Storage::disk('textures')->put($texture->hash, '');
+        $texture = Texture::factory()->create(['hash' => TextureFixtures::put()]);
         $this->get('/skinlib/show/'.$texture->tid)->assertViewHas('texture');
         $filter->assertApplied('grid:skinlib.show');
 
@@ -160,22 +158,19 @@ class SkinlibControllerTest extends TestCase
         $texture = Texture::factory()->create([
             'uploader' => $uploader->uid,
             'public' => false,
+            'hash' => TextureFixtures::put('webp'),
         ]);
-        Storage::disk('textures')->put($texture->hash, '');
         $this->get('/skinlib/show/'.$texture->tid)
-            ->assertForbidden()
-            ->assertSee(trans('skinlib.show.private'));
+            ->assertForbidden();
 
         option(['status_code_for_private' => 404]);
         $this->get('/skinlib/show/'.$texture->tid)
-            ->assertNotFound()
-            ->assertSee(trans('skinlib.show.deleted'));
+            ->assertNotFound();
         option(['status_code_for_private' => 403]);
 
         // Other user should not see private texture
         $this->actingAs(User::factory()->create())
-            ->get('/skinlib/show/'.$texture->tid)
-            ->assertSee(trans('skinlib.show.private'));
+            ->get('/skinlib/show/'.$texture->tid)->assertForbidden();
 
         // Administrators should be able to see private textures
         $this->actingAs(User::factory()->admin()->create())
@@ -207,9 +202,7 @@ class SkinlibControllerTest extends TestCase
 
     public function testInfo()
     {
-        $this->get(route('texture.info', ['texture' => 0]))
-            ->assertNotFound()
-            ->assertSee(trans('skinlib.non-existent'));
+        $this->get(route('texture.info', ['texture' => 0]))->assertNotFound();
 
         $texture = Texture::factory()->create();
         $this->get(route('texture.info', ['texture' => $texture]))
@@ -227,12 +220,9 @@ class SkinlibControllerTest extends TestCase
         $this->get('/skinlib/upload')->assertViewHas('extra');
     }
 
-    public function testHandleUpload()
+    public function testUploadValidatesFieldsAndFile(): void
     {
-        Event::fake();
-        /** @var FilesystemAdapter */
-        $disk = Storage::fake('textures');
-        $filter = Fakes\Filter::fake();
+        Storage::fake('textures');
         $user = User::factory()->create();
 
         // without file
@@ -269,10 +259,12 @@ class SkinlibControllerTest extends TestCase
             ->assertJsonValidationErrors('name');
         option(['texture_name_regexp' => null]);
 
-        // not a PNG file
+        // a non-image upload is not accepted
         $this->postJson(route('texture.upload'), [
             'name' => 'texture',
-            'file' => UploadedFile::fake()->create('fake', 5),
+            'file' => UploadedFile::fake()->createWithContent('readme.txt', 'Plain text'),
+            'type' => 'steve',
+            'public' => true,
         ])->assertJsonValidationErrors('file');
 
         // too large file
@@ -303,6 +295,12 @@ class SkinlibControllerTest extends TestCase
             'file' => $file,
             'type' => 'steve',
         ])->assertJsonValidationErrors('public');
+    }
+
+    public function testUploadValidatesTextureLayoutsAndWidth(): void
+    {
+        Storage::fake('textures');
+        $this->actingAs(User::factory()->create());
 
         // too wide texture
         option(['max_texture_width' => 128]);
@@ -386,7 +384,14 @@ class SkinlibControllerTest extends TestCase
                 'height' => 30,
             ]),
         ]);
+    }
 
+    public function testUploadChecksScoreAndDuplicatesAndDispatchesHooks(): void
+    {
+        Event::fake();
+        /** @var FilesystemAdapter */
+        $disk = Storage::fake('textures');
+        $filter = Fakes\Filter::fake();
         $upload = UploadedFile::fake()->image('texture.png', 64, 32);
 
         // score is not enough
@@ -454,7 +459,7 @@ class SkinlibControllerTest extends TestCase
             'uploaded_texture_hash',
             function ($hash, $file) use ($texture) {
                 $this->assertEquals($texture->hash, $hash);
-                $this->assertInstanceOf(Image::class, $file);
+                $this->assertInstanceOf(\GdImage::class, $file);
 
                 return true;
             }
@@ -462,7 +467,7 @@ class SkinlibControllerTest extends TestCase
         Event::assertDispatched(
             'texture.uploading',
             function ($eventName, $payload) use ($texture) {
-                $this->assertInstanceOf(Image::class, $payload[0]);
+                $this->assertInstanceOf(\GdImage::class, $payload[0]);
                 $this->assertEquals($texture->name, $payload[1]);
                 $this->assertEquals($texture->hash, $payload[2]);
 
@@ -473,7 +478,7 @@ class SkinlibControllerTest extends TestCase
             'texture.uploaded',
             function ($eventName, $payload) use ($texture) {
                 $this->assertTrue($texture->is($payload[0]));
-                $this->assertInstanceOf(Image::class, $payload[1]);
+                $this->assertInstanceOf(\GdImage::class, $payload[1]);
 
                 return true;
             }
@@ -524,6 +529,80 @@ class SkinlibControllerTest extends TestCase
         $disk->delete($texture->hash);
     }
 
+    public function testWebpUploadPublishesCanonicalPngAndResolvesAllSourceAliases(): void
+    {
+        $disk = Storage::fake('textures');
+        $owner = User::factory()->create(['score' => 100]);
+        $this->actingAs($owner);
+        $upload = UploadedFile::fake()->createWithContent('slim.webp', TextureFixtures::bytes('webp'));
+        $response = $this->postJson(route('texture.upload'), [
+            'name' => 'Genuine WebP skin', 'public' => true, 'type' => 'alex', 'file' => $upload,
+        ])->assertOk()->assertJsonPath('code', 0);
+        $texture = Texture::findOrFail($response->json('data.tid'));
+        $bytes = $disk->get($texture->hash);
+        $this->assertSame(hash('sha256', $bytes), $texture->hash);
+        $this->assertSame([64, 64, IMAGETYPE_PNG], array_slice(getimagesizefromstring($bytes), 0, 3));
+        $this->assertTrue($owner->closet()->whereKey($texture->tid)->exists());
+        $this->assertSame($bytes, $this->get('/textures/'.$texture->hash)->assertOk()->getContent());
+        $this->assertSame($bytes, $this->get('/asset/'.$texture->tid)->assertOk()->getContent());
+    }
+
+    public function testCancelledUploadLeavesNoReferenceOrScoreChange(): void
+    {
+        $disk = Storage::fake('textures');
+        $owner = User::factory()->create(['score' => 100]);
+        Texture::creating(static fn (Texture $texture): ?bool => $texture->name === 'Cancelled upload' ? false : null);
+        $this->actingAs($owner)->postJson(route('texture.upload'), [
+            'name' => 'Cancelled upload', 'public' => true, 'type' => 'steve',
+            'file' => UploadedFile::fake()->createWithContent('skin.png', TextureFixtures::bytes()),
+        ])->assertStatus(500);
+
+        $this->assertDatabaseCount('textures', 0);
+        $this->assertDatabaseCount('user_closet', 0);
+        $this->assertSame(100, $owner->fresh()->score);
+        [$hash] = $disk->files();
+        $this->assertDatabaseHas('texture_blobs', ['hash' => $hash]);
+        $this->assertSame([], $disk->allFiles('.staging'));
+        $this->get('/textures/'.$hash)->assertNotFound();
+    }
+
+    public function testPublicationRequiresOwnerOptInAndHidingDetachesPublicReferences(): void
+    {
+        Storage::fake('textures');
+        option(['private_score_per_storage' => 0, 'score_per_storage' => 0]);
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+        $staff = User::factory()->admin()->create();
+        $texture = Texture::factory()->private()->create([
+            'uploader' => $owner->uid, 'hash' => TextureFixtures::put(),
+        ]);
+        $url = route('texture.privacy', ['texture' => $texture]);
+        $hashUrl = '/textures/'.$texture->hash;
+        $this->actingAs($staff)->putJson($url, ['public' => true])->assertForbidden();
+        $this->actingAs($owner)->putJson($url)->assertOk();
+        $this->get($hashUrl)->assertNotFound();
+        $owner->closet()->attach($texture->tid);
+        $player = Player::factory()->create(['uid' => $owner->uid, 'tid_skin' => $texture->tid]);
+        $owner->update(['avatar' => $texture->tid]);
+        $this->putJson($url, ['public' => true])->assertOk()->assertJsonPath('code', 0);
+        $this->get($hashUrl)->assertOk();
+        $this->assertSame(0, $player->fresh()->tid_skin);
+        $this->assertSame(0, $owner->fresh()->avatar);
+
+        $other->closet()->attach($texture->tid);
+        $player->refresh()->update(['tid_skin' => $texture->tid]);
+        $other->update(['avatar' => $texture->tid]);
+        $this->actingAs($staff)->putJson($url, ['public' => false])->assertOk()->assertJsonPath('code', 0);
+        $this->putJson($url, ['public' => false])->assertOk()->assertJsonPath('code', 0);
+        $this->assertFalse($texture->fresh()->public);
+        $this->assertSame(0, $player->fresh()->tid_skin);
+        $this->assertSame(0, $other->fresh()->avatar);
+        $this->assertTrue($owner->closet()->whereKey($texture->tid)->exists());
+        $this->assertFalse($other->closet()->whereKey($texture->tid)->exists());
+        $this->get($hashUrl)->assertNotFound();
+        $this->get('/asset/'.$texture->tid)->assertOk();
+    }
+
     public function testDelete()
     {
         Event::fake();
@@ -531,13 +610,11 @@ class SkinlibControllerTest extends TestCase
         $disk = Storage::fake('textures');
 
         $uploader = User::factory()->create();
-        $texture = Texture::factory()->create(['uploader' => $uploader->uid]);
-
+        $texture = Texture::factory()->create(['uploader' => $uploader->uid, 'hash' => TextureFixtures::put()]);
         $duplicate = Texture::factory()->create([
             'hash' => $texture->hash,
             'uploader' => $uploader->uid,
         ]);
-        $disk->put($texture->hash, '');
 
         // when file is occupied, the file should not be deleted
         $this->actingAs($uploader)
@@ -548,6 +625,7 @@ class SkinlibControllerTest extends TestCase
             ]);
         $this->assertNull(Texture::find($duplicate->tid));
         $disk->assertExists($texture->hash);
+        $this->get('/textures/'.$texture->hash)->assertOk()->assertHeader('Content-Type', 'image/png');
         Event::assertDispatched(
             'texture.deleting',
             function ($eventName, $payload) use ($duplicate) {
@@ -582,7 +660,8 @@ class SkinlibControllerTest extends TestCase
                 'message' => trans('skinlib.delete.success'),
             ]);
         $this->assertNull(Texture::find($texture->tid));
-        $disk->assertMissing($texture->hash);
+        $disk->assertExists($texture->hash);
+        $this->get('/textures/'.$texture->hash)->assertNotFound();
     }
 
     public function testPrivacy()
@@ -590,10 +669,10 @@ class SkinlibControllerTest extends TestCase
         Event::fake();
         $uploader = User::factory()->create();
         $other = User::factory()->create();
-        $texture = Texture::factory()->create(['uploader' => $uploader->uid]);
+        Storage::fake('textures');
 
         // setting a texture to be private needs more scores
-        $texture = Texture::factory()->create(['uploader' => $uploader->uid]);
+        $texture = Texture::factory()->create(['uploader' => $uploader->uid, 'hash' => TextureFixtures::put()]);
         $uploader->score = 0;
         $uploader->save();
         $this->actingAs($uploader)
@@ -656,11 +735,11 @@ class SkinlibControllerTest extends TestCase
         $texture->save();
         $uploader->score = (int) option('private_score_per_storage');
         $uploader->save();
-        $this->putJson(route('texture.privacy', ['texture' => $texture]))
+        $this->putJson(route('texture.privacy', ['texture' => $texture]), ['public' => true])
             ->assertJson(['code' => 2, 'message' => trans('skinlib.upload.repeated')]);
         $duplicated->delete();
 
-        $this->putJson(route('texture.privacy', ['texture' => $texture]))
+        $this->putJson(route('texture.privacy', ['texture' => $texture]), ['public' => true])
             ->assertJson([
                 'code' => 0,
                 'message' => trans('skinlib.privacy.success', ['privacy' => trans('general.public')]),
@@ -694,7 +773,7 @@ class SkinlibControllerTest extends TestCase
         option(['return_score' => false, 'private_score_per_storage' => 0]);
         $uploader->score += 1000;
         $uploader->save();
-        $texture = Texture::factory()->private()->create(['uploader' => $uploader->uid]);
+        $texture = Texture::factory()->create(['uploader' => $uploader->uid]);
         $other = User::factory()->create();
         $other->closet()->attach($texture->tid, ['item_name' => 'a']);
         $this->putJson(route('texture.privacy', ['texture' => $texture]))
@@ -768,9 +847,10 @@ class SkinlibControllerTest extends TestCase
         Event::fake();
         $uploader = User::factory()->create();
         $other = User::factory()->create();
+        Storage::fake('textures');
         $texture = Texture::factory()
             ->alex()
-            ->create(['uploader' => $uploader->uid]);
+            ->create(['uploader' => $uploader->uid, 'hash' => TextureFixtures::put()]);
 
         // missing `type` field
         $this->actingAs($uploader)

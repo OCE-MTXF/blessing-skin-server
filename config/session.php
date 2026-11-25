@@ -43,7 +43,7 @@ return [
     |
     */
 
-    'encrypt' => false,
+    'encrypt' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -149,7 +149,7 @@ return [
     |
     */
 
-    'domain' => env('SESSION_DOMAIN'),
+    'domain' => null,
 
     /*
     |--------------------------------------------------------------------------
@@ -162,7 +162,7 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_SCHEME) === 'https',
 
     /*
     |--------------------------------------------------------------------------

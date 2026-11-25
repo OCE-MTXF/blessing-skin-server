@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Http\View\Composers;
+use App\Services\SafeMarkdown;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -30,7 +31,7 @@ class ViewServiceProvider extends ServiceProvider
         View::composer('shared.head', Composers\HeadComposer::class);
 
         View::composer('shared.notifications', function ($view) {
-            $notifications = auth()->user()->unreadNotifications->map(function ($notification) {
+            $notifications = auth()->user()->unreadNotifications()->limit(50)->get()->map(function ($notification) {
                 return [
                     'id' => $notification->id,
                     'title' => $notification->data['title'],
@@ -59,11 +60,15 @@ class ViewServiceProvider extends ServiceProvider
         View::composer('shared.user-panel', Composers\UserPanelComposer::class);
 
         View::composer('shared.copyright', function ($view) {
+            $text = option_localized('copyright_text');
+            $markdown = is_string($text) ? strtr($text, [
+                '{year}' => date('Y'),
+                '{site_name}' => (string) option_localized('site_name'),
+                '{site_url}' => url('/'),
+            ]) : '';
             $view->with([
                 'copyright' => option_localized('copyright_prefer', 0),
-                'custom_copyright' => option_localized('copyright_text'),
-                'site_name' => option_localized('site_name'),
-                'site_url' => option('site_url'),
+                'custom_copyright_html' => app(SafeMarkdown::class)->render($markdown),
             ]);
         });
 
@@ -75,8 +80,5 @@ class ViewServiceProvider extends ServiceProvider
             ]);
         });
 
-        View::composer('assets.*', function ($view) {
-            $view->with('cdn_base', option('cdn_address', ''));
-        });
     }
 }

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ trans('auth.oauth.authorization.return-title') }}</title>
+</head>
+<body>
+  <main>
+    <h1>{{ trans('auth.oauth.authorization.return-title') }}</h1>
+    <p>{{ trans('auth.oauth.authorization.return-explanation') }}</p>
+    <p><a id="oauth-return" rel="noreferrer" href="{{ callback }}">{{ trans('auth.oauth.authorization.return-link') }}</a></p>
+  </main>
+</body>
+</html>

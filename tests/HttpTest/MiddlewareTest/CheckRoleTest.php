@@ -16,10 +16,12 @@ class CheckRoleTest extends TestCase
             ->get('/admin')
             ->assertSuccessful();
 
-        $this->get('/admin/update')->assertForbidden();
+        $this->get('/admin/i18n')->assertForbidden();
+        $this->get('/admin/update')->assertNotFound();
 
         $this->actingAs(User::factory()->superAdmin()->create())
-            ->get('/admin/update')
+            ->get('/admin/i18n')
             ->assertSuccessful();
+        $this->get('/admin/update')->assertNotFound();
     }
 }

@@ -18,8 +18,8 @@ class RejectBannedUserTest extends TestCase
     public function testLogout()
     {
         $user = User::factory()->banned()->create();
-        $this->actingAs($user)
-            ->postJson(route('auth.logout'), ['accept' => 'application/json'])
-            ->assertSuccessful();
+        $this->actingAs($user)->postJson(route('auth.logout'))->assertSuccessful();
+        $this->assertGuest('web');
+        $this->assertSame($user->account_version + 1, $user->fresh()->account_version);
     }
 }

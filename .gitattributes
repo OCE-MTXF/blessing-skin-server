@@ -1,0 +1,14 @@
+# Source releases and Linux entrypoints should not pick up builder-local EOL conversions.
+* text=auto eol=lf
+*.php text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.ps1 text eol=lf
+*.png binary
+*.webp binary
+*.jpg binary
+*.ico binary
+*.zip binary
+*.ttf binary
+*.woff binary
+*.woff2 binary

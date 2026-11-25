@@ -4,97 +4,74 @@ namespace App\Http\Controllers;
 
 use App\Services\Plugin;
 use App\Services\PluginManager;
-use App\Services\Unzip;
-use Composer\CaBundle\CaBundle;
+use App\Services\PluginPackage;
 use Composer\Semver\Comparator;
-use Exception;
-use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Http;
+use UnexpectedValueException;
 
 class MarketController extends Controller
 {
-    public function marketData(PluginManager $manager)
+    public function marketData(PluginManager $manager): Collection
     {
-        $plugins = $this->fetch()->map(function ($item) use ($manager) {
-            $plugin = $manager->get($item['name']);
-
-            if ($plugin) {
-                $item['installed'] = $plugin->version;
-                $item['can_update'] = Comparator::greaterThan($item['version'], $item['installed']);
-            } else {
-                $item['installed'] = false;
+        $items = [];
+        foreach ($this->catalog() as $item) {
+            $name = $item['name'] ?? null;
+            $version = $item['version'] ?? null;
+            if (!is_string($name) || !PluginPackage::validName($name) || !is_string($version)
+                || !preg_match('/\A[A-Za-z0-9][A-Za-z0-9._+-]{0,127}\z/', $version) || isset($items[$name])) {
+                continue;
             }
-
-            $requirements = Arr::get($item, 'require', []);
-            unset($item['require']);
-            $item['dependencies'] = [
-                'all' => $requirements,
-                'unsatisfied' => $manager->getUnsatisfied(new Plugin('', $item)),
-            ];
-
-            return $item;
-        });
-
-        return $plugins;
-    }
-
-    public function download(Request $request, PluginManager $manager, Unzip $unzip)
-    {
-        $name = $request->input('name');
-        $plugins = $this->fetch();
-        $metadata = $plugins->firstWhere('name', $name);
-
-        if (!$metadata) {
-            return json(trans('admin.plugins.market.non-existent', ['plugin' => $name]), 1);
-        }
-
-        $fakePlugin = new Plugin('', $metadata);
-        $unsatisfied = $manager->getUnsatisfied($fakePlugin);
-        $conflicts = $manager->getConflicts($fakePlugin);
-        if ($unsatisfied->isNotEmpty() || $conflicts->isNotEmpty()) {
-            $reason = $manager->formatUnresolved($unsatisfied, $conflicts);
-
-            return json(trans('admin.plugins.market.unresolved'), 1, compact('reason'));
-        }
-
-        $path = tempnam(sys_get_temp_dir(), $name);
-        $response = Http::withOptions([
-            'sink' => $path,
-            'verify' => CaBundle::getSystemCaRootBundlePath(),
-        ])->get($metadata['dist']['url']);
-
-        if ($response->ok()) {
-            $unzip->extract($path, $manager->getPluginsDirs()->first());
-
-            return json(trans('admin.plugins.market.install-success'), 0);
-        } else {
-            return json(trans('admin.download.errors.download', ['error' => $response->status()]), 1);
-        }
-    }
-
-    protected function fetch(): Collection
-    {
-        $lang = in_array(app()->getLocale(), config('plugins.locales'))
-            ? app()->getLocale()
-            : config('app.fallback_locale');
-
-        $plugins = collect(explode(',', config('plugins.registry')))
-            ->map(function ($registry) use ($lang) {
-                $registry = str_replace('{lang}', $lang, $registry);
-                $response = Http::withOptions([
-                    'verify' => CaBundle::getSystemCaRootBundlePath(),
-                ])->get(trim($registry));
-
-                if ($response->ok()) {
-                    return $response->json()['packages'];
-                } else {
-                    throw new Exception(trans('admin.plugins.market.connection-error', ['error' => $response->status()]));
+            $plugin = $manager->get($name);
+            $installed = $plugin?->version ?? false;
+            try {
+                $canUpdate = $installed !== false && Comparator::greaterThan($version, $installed);
+            } catch (UnexpectedValueException) {
+                $canUpdate = false;
+            }
+            $requirements = [];
+            foreach (is_array($item['require'] ?? null) ? array_slice($item['require'], 0, 128, true) : [] as $key => $value) {
+                if (PluginPackage::validName((string) $key) && is_string($value) && strlen($value) <= 256) {
+                    $requirements[$key] = $value;
                 }
-            })
-            ->flatten(1);
+            }
+            $title = $this->text($item['title'] ?? null, 512, $name);
+            $description = $this->text($item['description'] ?? null, 4096);
+            $author = $this->text($item['author'] ?? null, 512);
+            $items[$name] = [
+                'name' => $name,
+                'version' => $version,
+                'title' => $title,
+                'description' => $description,
+                'author' => $author,
+                'installed' => $installed,
+                'can_update' => $canUpdate,
+                'dependencies' => [
+                    'all' => (object) $requirements,
+                    'unsatisfied' => (object) $manager->getUnsatisfied(new Plugin('', ['require' => $requirements]))->all(),
+                ],
+            ];
+        }
 
-        return $plugins;
+        return collect($items)->values();
+    }
+
+    private function text(mixed $value, int $bytes, string $default = ''): string
+    {
+        return is_string($value) && $value !== '' ? mb_strcut($value, 0, $bytes, 'UTF-8') : $default;
+    }
+
+    private function catalog(): array
+    {
+        $path = config('plugins.catalog_file');
+        if (!is_string($path) || $path === '' || PluginPackage::canonicalPath($path) === null || !is_file($path)) {
+            return [];
+        }
+
+        $maxBytes = 1024 * 1024;
+        $raw = @file_get_contents($path, false, null, 0, $maxBytes + 1);
+        $catalog = $raw !== false && strlen($raw) <= $maxBytes ? json_decode($raw, true, 16) : null;
+        $packages = $catalog['packages'] ?? null;
+
+        return is_array($packages) && array_is_list($packages) ? array_slice($packages, 0, 400) : [];
     }
 }

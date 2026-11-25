@@ -8,6 +8,6 @@
 
 {% block before_foot %}
   <script id="blessing-extra" type="application/json">
-    {{ {currentUid: auth_user().uid}|json_encode|raw }}
+    {{ {currentUid: auth_user().uid}|json_encode(15)|raw }}
   </script>
 {% endblock %}

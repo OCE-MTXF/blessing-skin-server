@@ -9,102 +9,76 @@ export interface ResponseBody<T = null> {
 }
 
 class HTTPError extends Error {
-  response: Response
-
-  constructor(message: string, response: Response) {
-    super(message)
-    this.response = response
+  constructor(status: number) {
+    super(`HTTP ${status}`)
   }
 }
 
 const empty = Object.create(null)
 export const init: RequestInit = {
   credentials: 'same-origin',
-  headers: new Headers({
-    Accept: 'application/json',
-  }),
+  headers: new Headers({ Accept: 'application/json' }),
 }
 
 function retrieveToken() {
-  const csrfField = document.querySelector<HTMLMetaElement>(
-    'meta[name="csrf-token"]',
-  )
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  return csrfField?.content || ''
+  return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || ''
+}
+
+async function alertError(text: string, type = 'warning') {
+  try {
+    await showModal({ mode: 'alert', text, type })
+  } catch {
+    // The alert may be dismissed with Escape or by clicking its backdrop.
+  }
 }
 
 export async function walkFetch(request: Request): Promise<any> {
   request.headers.set('X-CSRF-TOKEN', retrieveToken())
-
   try {
     const response = await fetch(request)
-    const cloned = response.clone()
-    const body =
-      response.headers.get('Content-Type') === 'application/json'
-        ? await response.json()
-        : await response.text()
-    if (response.ok) {
-      return body
-    }
-    let message: string = body.message
+    const contentType = response.headers.get('Content-Type')?.split(';', 1)[0]?.trim().toLowerCase()
+    const json = contentType === 'application/json' || contentType?.endsWith('+json')
+    if (response.ok) return json ? await response.json() : await response.text()
 
-    if (response.status === 422) {
-      // Process validation errors from Laravel.
-      const {
-        errors,
-      }: {
-        message: string
-        errors: { [field: string]: string[] }
-      } = body
-      return {
-        code: 1,
-        message: Object.keys(errors).map((field) => errors[field]![0])[0],
+    if (response.status >= 400 && response.status < 500) {
+      const body = json ? await response.json().catch(() => null) : null
+      const message = typeof body?.message === 'string' && body.message
+        ? body.message
+        : t('general.fatalError')
+      if (response.status === 422) {
+        const details = body?.errors
+        const first = details && typeof details === 'object'
+          ? Object.values(details).find((value) => Array.isArray(value) && typeof value[0] === 'string')
+          : undefined
+        return { code: 1, message: Array.isArray(first) ? first[0] : message }
       }
-    } else if (response.status === 419) {
-      return showModal({
-        mode: 'alert',
-        text: t('general.csrf'),
-      })
-    } else if (response.status === 403 || response.status === 400) {
-      return showModal({
-        mode: 'alert',
-        text: message,
-        type: 'warning',
-      })
+      if (response.status === 419 || response.status === 400 || response.status === 403) {
+        const text = response.status === 419 ? t('general.csrf') : message
+        await alertError(text)
+        return { code: -1, message: text }
+      }
+      if (response.status === 429) return { code: 1, message }
     }
 
-    if (body.exception && Array.isArray(body.trace)) {
-      const trace = (body.trace as Array<{ file: string; line: number }>)
-        .map((t, i) => `[${i + 1}] ${t.file}#L${t.line}`)
-        .join('<br>')
-      message = `${message}<br><details>${trace}</details>`
+    // Never display exception pages or expose raw responses to browser extensions.
+    throw new HTTPError(response.status)
+  } catch (error: unknown) {
+    const message = t('general.fatalError')
+    emit('fetchError', error instanceof HTTPError ? error : new Error(message))
+    try {
+      await showModal({ mode: 'alert', title: message, text: message, type: 'danger', okButtonType: 'outline-light' })
+    } catch {
+      // Preserve the established result shape even if the user dismisses the dialog.
     }
-
-    throw new HTTPError(message || body, cloned)
-  } catch (error: any) {
-    emit('fetchError', error)
-    await showModal({
-      mode: 'alert',
-      title: t('general.fatalError'),
-      dangerousHTML: error.message,
-      type: 'danger',
-      okButtonType: 'outline-light',
-    })
-
-    return { code: -1, message: t('general.fatalError') }
+    return { code: -1, message }
   }
 }
 
 export function get<T = any>(url: string, params = empty): Promise<T> {
-  emit('beforeFetch', {
-    method: 'GET',
-    url,
-    data: params,
-  })
-
+  emit('beforeFetch', { method: 'GET', url, data: params })
   const qs = new URLSearchParams(params).toString()
-
-  return walkFetch(new Request(`${blessing.base_url}${url}?${qs}`, init))
+  const suffix = qs ? `${url.includes('?') ? '&' : '?'}${qs}` : ''
+  return walkFetch(new Request(`${blessing.base_url}${url}${suffix}`, init))
 }
 
 function nonGet<T = any>(
@@ -112,48 +86,28 @@ function nonGet<T = any>(
   url: string,
   data?: FormData | Record<string, unknown>,
 ): Promise<T> {
-  emit('beforeFetch', {
-    method: method.toUpperCase(),
-    url,
-    data,
-  })
-
+  // Request payloads can contain passwords, reset tokens, CAPTCHA answers or
+  // personal data. Extensions can observe the action, not its body or query.
+  emit('beforeFetch', { method, url: url.split(/[?#]/, 1)[0] })
   const request = new Request(`${blessing.base_url}${url}`, {
-    body: data instanceof FormData ? data : JSON.stringify(data),
-    method: method.toUpperCase(),
     ...init,
+    body: data instanceof FormData ? data : JSON.stringify(data),
+    method,
   })
-  if (!(data instanceof FormData)) {
-    request.headers.set('Content-Type', 'application/json')
-  }
-
+  if (!(data instanceof FormData)) request.headers.set('Content-Type', 'application/json')
   return walkFetch(request)
 }
 
-export function post<T = any>(
-  url: string,
-  data?: FormData | Record<string, unknown>,
-): Promise<T> {
+export function post<T = any>(url: string, data?: FormData | Record<string, unknown>): Promise<T> {
   return nonGet<T>('POST', url, data)
 }
 
-export function put<T = any>(
-  url: string,
-  data?: FormData | Record<string, unknown>,
-): Promise<T> {
+export function put<T = any>(url: string, data?: FormData | Record<string, unknown>): Promise<T> {
   return nonGet<T>('PUT', url, data)
 }
 
-export function del<T = any>(
-  url: string,
-  data?: FormData | Record<string, unknown>,
-): Promise<T> {
+export function del<T = any>(url: string, data?: FormData | Record<string, unknown>): Promise<T> {
   return nonGet<T>('DELETE', url, data)
 }
 
-blessing.fetch = {
-  get,
-  post,
-  put,
-  del,
-}
+blessing.fetch = { get, post, put, del }

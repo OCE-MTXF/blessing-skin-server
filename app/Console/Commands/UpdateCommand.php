@@ -2,48 +2,33 @@
 
 namespace App\Console\Commands;
 
-use Composer\Semver\Comparator;
+use App\Services\Installation\Lifecycle;
+use App\Services\Installation\LifecycleException;
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Console\Kernel as Artisan;
-use Illuminate\Filesystem\Filesystem;
-use Illuminate\Support\Facades\Cache;
+use Throwable;
 
-class UpdateCommand extends Command
+final class UpdateCommand extends Command
 {
-    protected $signature = 'update';
+    protected $signature = 'bs:upgrade {--adopt-legacy : Explicitly adopt a verified, complete 6.0.2 database}';
 
-    protected $description = 'Execute update.';
+    protected $description = 'Upgrade schema and state for a staged release offline (no downloads)';
 
-    public function handle(Artisan $artisan, Filesystem $filesystem)
+    public function handle(Lifecycle $lifecycle): int
     {
-        $this->procedures()->each(function ($procedure, $version) {
-            if (Comparator::lessThan(option('version'), $version)) {
-                $procedure();
-            }
-        });
+        try {
+            $changed = $lifecycle->upgrade($this->option('adopt-legacy'));
+        } catch (LifecycleException $failure) {
+            $this->error($failure->getMessage());
 
-        option(['version' => config('app.version')]);
-        $artisan->call('migrate', ['--force' => true]);
-        $artisan->call('view:clear');
-        $filesystem->put(storage_path('install.lock'), '');
-        Cache::flush();
+            return self::FAILURE;
+        } catch (Throwable) {
+            $this->error('Upgrade failed. Keep traffic paused and restore a consistent backup if necessary.');
 
-        $this->info(trans('setup.updates.success.title'));
-    }
+            return self::FAILURE;
+        }
 
-    /**
-     * @codeCoverageIgnore
-     */
-    protected function procedures()
-    {
-        return collect([
-            // this is just for testing
-            '0.0.1' => fn () => event('__0.0.1'),
-            '5.0.0' => function () {
-                if (option('home_pic_url') === './app/bg.jpg') {
-                    option(['home_pic_url' => './app/bg.webp']);
-                }
-            },
-        ]);
+        $this->info($changed ? 'Upgrade completed. Verify readiness before enabling traffic.' : 'Already at the current release.');
+
+        return self::SUCCESS;
     }
 }

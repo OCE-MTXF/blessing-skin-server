@@ -24,13 +24,13 @@ test('change nickname', async () => {
   const event = new Event('submit')
   form.dispatchEvent(event)
   await flushPromises()
-  expect(post).toBeCalledWith('/user/profile?action=nickname', {
+  expect(post).toHaveBeenCalledWith('/user/profile?action=nickname', {
     new_nickname: 'nickname',
   })
-  expect(showModal).toBeCalledWith({ mode: 'alert', text: 'w' })
+  expect(showModal).toHaveBeenCalledWith({ mode: 'alert', text: 'w' })
 
   form.dispatchEvent(event)
   await flushPromises()
-  expect(showModal).toBeCalledWith({ mode: 'alert', text: 'o' })
+  expect(showModal).toHaveBeenCalledWith({ mode: 'alert', text: 'o' })
   expect(document.querySelector('span')!.textContent).toBe('nickname')
 })

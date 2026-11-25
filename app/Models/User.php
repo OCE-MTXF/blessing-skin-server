@@ -3,15 +3,19 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasPassword;
+use App\Models\Concerns\SearchString;
+use App\Services\Auth\AccountIdentity;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Passport\Contracts\OAuthenticatable;
 use Laravel\Passport\HasApiTokens;
-use Lorisleiva\LaravelSearchString\Concerns\SearchString;
 
 /**
  * @property int         $uid
+ * @property int         $account_version
+ * @property string|null $email_key
  * @property string      $email
  * @property string      $password
  * @property string      $nickname
@@ -28,7 +32,7 @@ use Lorisleiva\LaravelSearchString\Concerns\SearchString;
  * @property Collection  $players
  * @property Collection  $closet
  */
-class User extends Authenticatable
+class User extends Authenticatable implements OAuthenticatable
 {
     use Notifiable;
     use HasFactory;
@@ -44,6 +48,8 @@ class User extends Authenticatable
     protected $primaryKey = 'uid';
     public $timestamps = false;
 
+    protected $attributes = ['account_version' => 1];
+
     protected $fillable = [
         'email', 'nickname', 'avatar', 'score', 'permission', 'last_sign_at',
     ];
@@ -55,9 +61,17 @@ class User extends Authenticatable
         'permission' => 'integer',
         'verified' => 'bool',
         'is_dark_mode' => 'bool',
+        'account_version' => 'integer',
     ];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'remember_token', 'verification_token', 'account_version', 'email_key'];
+
+    public function setEmailAttribute(?string $email): void
+    {
+        $email = AccountIdentity::email($email ?? '');
+        $this->attributes['email'] = $email;
+        $this->attributes['email_key'] = AccountIdentity::emailKey($email);
+    }
 
     protected $searchStringColumns = [
         'uid',

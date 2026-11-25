@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import ReactDOM from 'react-dom'
-import { hot } from 'react-hot-loader/root'
 import { t } from '@/scripts/i18n'
 import useBlessingExtra from '@/scripts/hooks/useBlessingExtra'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
@@ -11,6 +10,7 @@ import { isAlex } from '@/scripts/textureUtils'
 import { TextureType } from '@/scripts/types'
 import urls from '@/scripts/urls'
 import FileInput from '@/components/FileInput'
+import SafeMarkdown from '@/components/SafeMarkdown'
 import ViewerSkeleton from '@/components/ViewerSkeleton'
 
 const Previewer = React.lazy(() => import('@/components/Viewer'))
@@ -181,10 +181,9 @@ const Upload: React.FC = () => {
           />
 
           {contentPolicy && (
-            <div
-              className="callout callout-warning"
-              dangerouslySetInnerHTML={{ __html: contentPolicy }}
-            />
+            <div className="callout callout-warning">
+              <SafeMarkdown html={contentPolicy} />
+            </div>
           )}
         </div>
         <div className="card-footer">
@@ -232,7 +231,10 @@ const Upload: React.FC = () => {
             </div>
           )}
           {isPrivate && (
-            <div className="callout callout-info mt-3">{privacyNotice}</div>
+            <div className="callout callout-info mt-3">
+              <p className="mb-1">{t('skinlib.upload.privacy-notice')}</p>
+              {privacyNotice}
+            </div>
           )}
           {!isPrivate && award > 0 && (
             <div className="callout callout-success mt-3">
@@ -256,4 +258,4 @@ const Upload: React.FC = () => {
   )
 }
 
-export default hot(Upload)
+export default Upload

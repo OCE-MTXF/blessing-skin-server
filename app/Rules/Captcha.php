@@ -2,35 +2,26 @@
 
 namespace App\Rules;
 
-use Composer\CaBundle\CaBundle;
-use Gregwar\Captcha\CaptchaBuilder;
 use Illuminate\Contracts\Validation\Rule;
-use Illuminate\Support\Facades\Http;
 
-class Captcha implements Rule
+final class Captcha implements Rule
 {
-    public function passes($attribute, $value)
+    public function passes($attribute, $value): bool
     {
-        $secretkey = option('recaptcha_secretkey');
-        if ($secretkey) {
-            return Http::asForm()
-                ->withOptions(['verify' => CaBundle::getSystemCaRootBundlePath()])
-                ->post('https://www.recaptcha.net/recaptcha/api/siteverify', [
-                    'secret' => $secretkey,
-                    'response' => $value,
-                ])
-                ->json()['success'];
-        }
+        $challenge = session()->pull('captcha');
 
-        $builder = new CaptchaBuilder(session()->pull('captcha'));
-
-        return $builder->testPhrase($value);
+        return is_array($challenge)
+            && is_string($challenge['phrase'] ?? null)
+            && $challenge['phrase'] !== ''
+            && is_int($challenge['expires_at'] ?? null)
+            && $challenge['expires_at'] >= time()
+            && is_string($value)
+            && strlen($value) <= 32
+            && hash_equals(strtolower($challenge['phrase']), strtolower($value));
     }
 
-    public function message()
+    public function message(): string
     {
-        return option('recaptcha_secretkey')
-            ? trans('validation.recaptcha')
-            : trans('validation.captcha');
+        return trans('validation.captcha');
     }
 }

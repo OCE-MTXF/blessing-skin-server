@@ -10,6 +10,7 @@ use Blessing\Rejection;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Tests\Support\TextureFixtures;
 
 class ReportControllerTest extends TestCase
 {
@@ -241,8 +242,8 @@ class ReportControllerTest extends TestCase
         $uploader = User::factory()->create();
         $reporter = User::factory()->create();
         $admin = User::factory()->admin()->create();
-        $texture = Texture::factory()->create(['uploader' => $uploader->uid]);
-        $disk->put($texture->hash, '');
+        $texture = Texture::factory()->create(['uploader' => $uploader->uid, 'hash' => TextureFixtures::put('webp')]);
+        $retained = Texture::factory()->create(['hash' => $texture->hash]);
 
         $report = new Report();
         $report->tid = $texture->tid;
@@ -273,7 +274,10 @@ class ReportControllerTest extends TestCase
         $this->assertEquals(Report::RESOLVED, $report->status);
         $this->assertNull(Texture::find($texture->tid));
         $this->assertEquals($score + 7, $reporter->score);
-        Storage::assertMissing($texture->hash);
+        $disk->assertExists($texture->hash);
+        $this->assertNotNull($retained->fresh());
+        $this->withoutExceptionHandling();
+        $this->get('/textures/'.$retained->hash)->assertOk()->assertHeader('Content-Type', 'image/webp');
         Event::assertDispatched('report.reviewing', function ($event, $payload) use ($id) {
             [$report, $action] = $payload;
             $this->assertEquals($id, $report->id);
@@ -356,7 +360,7 @@ class ReportControllerTest extends TestCase
             ]);
         $report->refresh();
         $this->assertEquals(Report::RESOLVED, $report->status);
-        $this->assertEquals($score, $reporter->score);
+        $this->assertEquals($score + 7, $reporter->fresh()->score);
         Event::assertNotDispatched('texture.deleted');
         Event::assertDispatched('report.resolved', function ($event, $payload) use ($id) {
             [$report, $action] = $payload;

@@ -9,6 +9,8 @@ use App\Models\User;
 use Blessing\Rejection;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
+use Tests\Support\TextureFixtures;
 
 class PlayerControllerTest extends TestCase
 {
@@ -321,10 +323,11 @@ class PlayerControllerTest extends TestCase
 
     public function testSetTexture()
     {
+        Storage::fake('textures');
         $player = Player::factory()->create();
         $user = $player->user;
-        $skin = Texture::factory()->create();
-        $cape = Texture::factory()->cape()->create();
+        $skin = Texture::factory()->create(['hash' => TextureFixtures::put()]);
+        $cape = Texture::factory()->cape()->create(['hash' => TextureFixtures::put('webp', 64, 32)]);
 
         // rejected
         $filter = Fakes\Filter::fake();

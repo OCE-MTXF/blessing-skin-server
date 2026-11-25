@@ -2,67 +2,60 @@
 
 namespace Tests;
 
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use App\Events\RenderingHeader;
 use Illuminate\Support\Facades\Event;
 use Symfony\Component\DomCrawler\Crawler;
 
 class HeadComposerTest extends TestCase
 {
-    use DatabaseTransactions;
-
-    public function testAddFavicon()
+    public function testFaviconAndThemeColor(): void
     {
-        $this->get('/')->assertSee(config('options.favicon_url'));
-
-        option(['favicon_url' => '/a']);
-        $this->get('/')->assertSee(url('/a'));
-
-        option(['favicon_url' => 'http://example.com/icon']);
-        $this->get('/')->assertSee('http://example.com/icon');
-    }
-
-    public function testApplyThemeColor()
-    {
-        $crawler = new Crawler($this->get('/')->getContent());
+        $this->get('/')->assertOk()->assertSee(config('options.favicon_url'));
+        option(['favicon_url' => '/local-icon.png']);
+        $this->get('/')->assertOk()->assertSee(url('/local-icon.png'));
+        $crawler = new Crawler($this->get('/')->assertOk()->getContent());
         $this->assertCount(1, $crawler->filter('meta[name="theme-color"]'));
+
+        $httpsIcon = 'https://assets.example.invalid/site-icon.png';
+        option(['favicon_url' => $httpsIcon]);
+        $crawler = new Crawler($this->get('/')->assertOk()->getContent());
+        $this->assertSame($httpsIcon, $crawler->filter('link[rel="shortcut icon"]')->attr('href'));
+
+        option(['favicon_url' => '//assets.example.invalid/site-icon.png']);
+        $crawler = new Crawler($this->get('/')->assertOk()->getContent());
+        $this->assertSame(url(config('options.favicon_url')), $crawler->filter('link[rel="shortcut icon"]')->attr('href'));
     }
 
-    public function testSeo()
+    public function testRetainsSeoTextAndIgnoresLegacyCodeAndCdnOptions(): void
     {
+        $siteName = 'Local <b>Name</b> & "friends"';
         option([
-            'meta_keywords' => 'kw',
-            'meta_description' => 'desc',
-            'meta_extras' => '<meta name=fake><div id=disallowed></div>',
+            'site_name' => $siteName,
+            'meta_keywords' => 'topic & second',
+            'meta_description' => 'A <b>local description</b>',
+            'meta_extras' => '<meta name="legacy-meta">',
+            'custom_css' => 'unused legacy CSS marker',
+            'custom_js' => 'unused legacy JS marker',
+            'cdn_address' => 'https://assets.example.invalid',
         ]);
-        $crawler = new Crawler($this->get('/')->getContent());
-        $this->assertEquals(
-            'kw',
-            $crawler->filter('meta[name=keywords]')->attr('content')
-        );
-        $this->assertEquals(
-            'desc',
-            $crawler->filter('meta[name=description]')->attr('content')
-        );
-        $this->assertCount(1, $crawler->filter('meta[name=fake]'));
-        $this->assertCount(0, $crawler->filter('div#disallowed'));
+        $response = $this->get('/')->assertOk()
+            ->assertDontSee('legacy-meta')->assertDontSee('unused legacy CSS marker')
+            ->assertDontSee('unused legacy JS marker')->assertDontSee('assets.example.invalid');
+        $crawler = new Crawler($response->getContent());
+        $this->assertSame('topic & second', $crawler->filter('meta[name=keywords]')->attr('content'));
+        $this->assertSame('A <b>local description</b>', $crawler->filter('meta[name=description]')->attr('content'));
+        $config = $crawler->filter('script#blessing-config[type="application/json"]');
+        $this->assertCount(1, $config);
+        $this->assertStringNotContainsString('<b>', $config->text());
+        $this->assertSame($siteName, json_decode($config->text(), true, flags: JSON_THROW_ON_ERROR)['site_name']);
     }
 
-    public function testInjectStyles()
+    public function testRetainsTrustedHeaderHook(): void
     {
-        option(['custom_css' => 'div {} <style><div id=disallowed></div></style>']);
-
-        $this->get('/')->assertSee('div {}');
-
-        $crawler = new Crawler($this->get('/')->getContent());
-        $this->assertCount(0, $crawler->filter('div#disallowed'));
-    }
-
-    public function testAddExtra()
-    {
-        Event::listen(\App\Events\RenderingHeader::class, function ($event) {
+        Event::listen(RenderingHeader::class, function (RenderingHeader $event) {
             $event->contents[] = '<meta name=appended>';
         });
 
-        $this->get('/')->assertSee('<meta name=appended>', false);
+        $this->get('/')->assertOk()->assertSee('<meta name=appended>', false);
     }
 }

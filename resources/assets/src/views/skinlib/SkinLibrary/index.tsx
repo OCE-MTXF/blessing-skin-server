@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import { hot } from 'react-hot-loader/root'
 import useBlessingExtra from '@/scripts/hooks/useBlessingExtra'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
 import { t } from '@/scripts/i18n'
@@ -287,4 +286,4 @@ const SkinLibrary: React.FC = () => {
   )
 }
 
-export default hot(SkinLibrary)
+export default SkinLibrary

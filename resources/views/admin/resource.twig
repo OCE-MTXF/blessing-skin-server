@@ -4,19 +4,19 @@
 
 {% block content %}
   <div class="row">
-    <div class="col-md-12">
-      <div class="callout callout-warning">
-        {{ trans('options.res-warning') }}
-      </div>
-    </div>
-  </div>
-
-  <div class="row">
-    <div class="col-md-6">
-      {{ forms.resources.render()|raw }}
-    </div>
     <div class="col-md-6">
       {{ forms.cache.render()|raw }}
+    </div>
+    <div class="col-md-6">
+      <form class="card card-warning" method="post" action="{{ route('admin.resource.cache') }}">
+        {{ csrf_field() }}
+        <div class="card-body">
+          {% if session('rendition_cache_cleared') %}
+            <p role="status">{{ trans('options.cache.renditions-cleared') }}</p>
+          {% endif %}
+          <button type="submit" class="btn btn-warning">{{ trans('options.cache.clear-renditions') }}</button>
+        </div>
+      </form>
     </div>
   </div>
 {% endblock %}

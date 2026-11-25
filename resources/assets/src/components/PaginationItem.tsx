@@ -1,6 +1,7 @@
 import React from 'react'
 
 interface Props {
+  children?: React.ReactNode
   disabled?: boolean
   active?: boolean
   title?: string

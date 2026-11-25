@@ -57,6 +57,9 @@ oauth:
     introduction: 第三方应用 :name 正在向您请求获取权限。
     button: 授权
     permissions: 权限
+    return-title: 返回本机应用
+    return-explanation: 仅在确认是本机应用发起本次请求时，点击继续返回该应用。
+    return-link: 继续返回应用
   scope:
     user:
       read: 登录并读取您的个人信息

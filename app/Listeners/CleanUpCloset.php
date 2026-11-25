@@ -4,31 +4,28 @@ namespace App\Listeners;
 
 use App\Models\Texture;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class CleanUpCloset
 {
-    public function handle(Texture $texture)
+    public function handle(Texture $texture): void
     {
-        // no need to update users' closet
-        // if texture was switched from "private" to "public"
         if ($texture->exists && $texture->public) {
             return;
         }
 
-        $likers = $texture
-            ->likers()
-            ->where('user_uid', '!=', $texture->uploader)
-            ->get();
-        $likers->each(function (User $user) use ($texture) {
-            $user->closet()->detach($texture->tid);
-            if (option('return_score')) {
-                $user->score += (int) option('score_per_closet_item');
-                $user->save();
-            }
-        });
-
+        $pivots = DB::table('user_closet')->where('texture_tid', $texture->tid);
         if ($texture->exists) {
-            $texture->decrement('likes', $likers->count());
+            $pivots->where('user_uid', '!=', $texture->uploader);
+        }
+        $otherUids = (clone $pivots)->where('user_uid', '!=', $texture->uploader)->pluck('user_uid')->unique();
+        $count = $pivots->delete();
+        if (option('return_score') && $otherUids->isNotEmpty()) {
+            User::whereIn('uid', $otherUids)->increment('score', (int) option('score_per_closet_item'));
+        }
+        if ($texture->exists && $count > 0) {
+            $texture->likes = max(0, $texture->likes - $count);
+            $texture->save();
         }
     }
 }

@@ -5,276 +5,107 @@ namespace Tests;
 use App\Models\Player;
 use App\Models\Texture;
 use App\Models\User;
-use Blessing\Minecraft;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Storage;
-use Intervention\Image\Facades\Image;
+use Illuminate\Testing\TestResponse;
+use Tests\Support\TextureFixtures;
 
 class TextureControllerTest extends TestCase
 {
     use DatabaseTransactions;
 
-    public function testJson()
+    protected function setUp(): void
     {
-        $steve = Texture::factory()->create();
-
-        // Player is not existed
-        $this->get('/nope.json')->assertStatus(404);
-
-        // Player is banned
-        $player = Player::factory()->create(['tid_skin' => $steve->tid]);
-        $player->user->permission = User::BANNED;
-        $player->user->save();
-        $this->get("/{$player->name}.json")
-            ->assertSee(trans('general.player-banned'))
-            ->assertStatus(403);
-
-        $player->user->permission = User::NORMAL;
-        $player->user->save();
-        $this->getJson("/{$player->name}.json")
-            ->assertJson([
-                'username' => $player->name,
-                'skins' => [
-                    'default' => $steve->hash,
-                ],
-                'cape' => null,
-            ])->assertHeader('Last-Modified');
+        parent::setUp();
+        Storage::fake('textures');
+        option(['allow_downloading_texture' => true, 'enable_avatar_cache' => true, 'enable_preview_cache' => true]);
     }
 
-    public function testPreviewByHash()
+    public function testLegacyPngAndWebpPathsServeTheirActualFormats(): void
     {
-        $disk = Storage::fake('textures');
-        $this->mock(Minecraft::class, function ($mock) {
-            $mock->shouldReceive('renderSkin')->andReturn(Image::canvas(1, 1));
-            $mock->shouldReceive('renderCape')->andReturn(Image::canvas(1, 1));
-        });
+        foreach (['png' => IMAGETYPE_PNG, 'webp' => IMAGETYPE_WEBP] as $format => $expected) {
+            $texture = Texture::factory()->create(['hash' => TextureFixtures::put($format)]);
+            foreach (["/textures/$texture->hash", "/csl/textures/$texture->hash", "/raw/$texture->tid", "/asset/$texture->tid"] as $url) {
+                $response = $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/'.$format)
+                    ->assertHeader('X-Content-Type-Options', 'nosniff');
+                $this->assertSame([64, 64, $expected], array_slice(getimagesizefromstring($response->getContent()), 0, 3));
+                $this->assertInstanceOf(\GdImage::class, imagecreatefromstring($response->getContent()));
+            }
+        }
 
-        $skin = Texture::factory()->create();
-        $disk->put($skin->hash, '');
-        $this->get(route('preview.hash', ['hash' => $skin->hash]))
-            ->assertHeader('Content-Type', 'image/webp');
-    }
-
-    public function testPreview()
-    {
-        $disk = Storage::fake('textures');
-
-        $this->mock(Minecraft::class, function ($mock) {
-            $mock->shouldReceive('renderSkin')->andReturn(Image::canvas(1, 1));
-            $mock->shouldReceive('renderCape')->andReturn(Image::canvas(1, 1));
-        });
-
-        $skin = Texture::factory()->create();
-        $this->get(route('preview.texture', ['texture' => $skin]))->assertNotFound();
-
-        $disk->put($skin->hash, '');
-        $this->get(route('preview.texture', ['texture' => $skin]))
-            ->assertHeader('Content-Type', 'image/webp');
-        Cache::clear();
-        $this->get(route('preview.texture', ['texture' => $skin, 'png' => true]))
-            ->assertHeader('Content-Type', 'image/png');
-        $this->assertTrue(Cache::has('preview-t'.$skin->tid.'-png'));
-
-        $cape = Texture::factory()->cape()->create();
-        $disk->put($cape->hash, '');
-        $this->get(route('preview.texture', ['texture' => $cape, 'height' => 100]))
-            ->assertHeader('Content-Type', 'image/webp');
-        $this->assertTrue(Cache::has('preview-t'.$cape->tid.'-webp'));
-    }
-
-    public function testRaw()
-    {
-        $disk = Storage::fake('textures');
-        $skin = Texture::factory()->create();
-
-        // Not found
-        $this->get('/raw/0')->assertNotFound();
-
-        // Missing texture file
-        $this->get('/raw/'.$skin->tid)->assertNotFound();
-
-        // Success
-        $disk->put($skin->hash, '');
-        $this->get('/raw/'.$skin->tid)->assertHeader('Content-Type', 'image/png');
-
-        // Disallow downloading texture directly
         option(['allow_downloading_texture' => false]);
-        $this->get('/raw/'.$skin->tid)->assertForbidden();
+        $this->get('/raw/'.$texture->tid)->assertForbidden();
+        $this->get('/asset/'.$texture->tid)->assertOk();
+        $this->get('/csl/textures/'.$texture->hash)->assertOk();
     }
 
-    public function testTexture()
+    public function testPublishedProfileAndAvatarRevalidateVisibilityAfterCacheWarmup(): void
     {
-        $disk = Storage::fake('textures');
-        $skin = Texture::factory()->create();
+        $skin = Texture::factory()->alex()->create(['hash' => TextureFixtures::put('webp')]);
+        $cape = Texture::factory()->cape()->create(['hash' => TextureFixtures::put('png', 64, 32)]);
+        $player = Player::factory()->create(['tid_skin' => $skin->tid, 'tid_cape' => $cape->tid]);
+        $player->user->closet()->attach([$skin->tid, $cape->tid]);
+        $player->user->update(['avatar' => $skin->tid]);
+        $profile = ['/csl/'.$player->name.'.json', '/'.$player->name.'.json'];
+        foreach ($profile as $path) {
+            $json = $this->getJson($path)->assertOk()->assertHeader('Last-Modified')->assertExactJson([
+                'username' => $player->name, 'skins' => ['slim' => $skin->hash], 'cape' => $cape->hash,
+            ]);
+            $this->getJson($path, ['If-None-Match' => $json->headers->get('ETag')])->assertStatus(304);
+        }
+        $etag = $json->headers->get('ETag');
+        $default = $this->get('/avatar/0?png&size=50')->assertOk()->getContent();
+        $avatar = $this->get('/avatar/player/'.$player->name.'?png&size=50')->assertOk()->getContent();
+        $this->assertNotSame($default, $avatar);
+        $this->assertSame($avatar, $this->get('/avatar/user/'.$player->uid.'?png&size=50')->assertOk()->getContent());
+        $hashAvatar = $this->get('/avatar/hash/'.$skin->hash.'?png&size=50')->assertOk()->headers->get('ETag');
+        $this->get('/preview/hash/'.$skin->hash.'?png')->assertOk();
 
-        $this->get('/textures/'.$skin->hash)->assertNotFound();
-
-        $disk->put($skin->hash, '');
-        $this->get('/textures/'.$skin->hash)
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/png');
-        $this->get('/csl/textures/'.$skin->hash)
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/png');
+        $skin->update(['public' => false]);
+        $this->get('/avatar/hash/'.$skin->hash.'?png&size=50', ['If-None-Match' => $hashAvatar])->assertNotFound();
+        $this->get('/preview/hash/'.$skin->hash.'?png')->assertNotFound();
+        $this->assertSame($default, $this->get('/avatar/user/'.$player->uid.'?png&size=50')->assertOk()->getContent());
+        $this->getJson($profile[1], ['If-None-Match' => $etag])->assertOk()->assertExactJson([
+            'username' => $player->name, 'skins' => ['default' => null], 'cape' => $cape->hash,
+        ]);
     }
 
-    public function testAvatarByPlayer()
+    public function testOwnerAndStaffHavePrivateNoStoreTidViews(): void
     {
-        $disk = Storage::fake('textures');
-
-        $this->get(route('avatar.player', ['name' => 'abc']))->assertNotFound();
-
-        $player = Player::factory()->create();
-        $this->get(route('avatar.player', ['name' => $player->name]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-
-        $this->mock(Minecraft::class, function ($mock) {
-            $mock->shouldReceive('render2dAvatar')->andReturn(Image::canvas(1, 1));
-        });
-        $texture = Texture::factory()->create();
-        $disk->put($texture->hash, '');
-        $player->tid_skin = $texture->tid;
-        $player->save();
-        $this->get(route('avatar.player', ['name' => $player->name]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-
-        Cache::clear();
-        $image = $this->get(route('avatar.player', [
-            'name' => $player->name,
-            'png' => true,
-        ]))->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/png')
-            ->getContent();
-        $image = Image::make($image);
-        $this->assertEquals(100, $image->width());
-        $this->assertEquals(100, $image->height());
-
-        $image = $this->get(route('avatar.player', [
-            'name' => $player->name,
-            'size' => 50,
-            'png' => true,
-        ]))->getContent();
-        $image = Image::make($image);
-        $this->assertEquals(50, $image->width());
-        $this->assertEquals(50, $image->height());
+        $texture = Texture::factory()->private()->create(['hash' => TextureFixtures::put()]);
+        $paths = ['/asset/'.$texture->tid, '/raw/'.$texture->tid, '/preview/'.$texture->tid, '/avatar/'.$texture->tid];
+        foreach ($paths as $path) {
+            $this->get($path)->assertNotFound();
+        }
+        foreach ([$texture->owner, User::factory()->admin()->create()] as $actor) {
+            $this->actingAs($actor);
+            foreach ($paths as $path) {
+                $this->assertStringContainsString('no-store', $this->get($path)->assertOk()->headers->get('Cache-Control'));
+            }
+            $this->get('/textures/'.$texture->hash)->assertNotFound();
+        }
     }
 
-    public function testAvatarByUser()
+    public function testCapeRenderVariantsAndSkinAvatarsHaveBoundedIndependentDimensions(): void
     {
-        $disk = Storage::fake('textures');
+        $cape = Texture::factory()->cape()->create(['hash' => TextureFixtures::put('webp', 64, 32)]);
+        $small = $this->get('/preview/hash/'.$cape->hash.'?height=100&png')->assertOk();
+        $tall = $this->get('/preview/hash/'.$cape->hash.'?height=200&png')->assertOk();
+        $this->assertImage($small, 142, 140, IMAGETYPE_PNG);
+        $this->assertImage($tall, 205, 240, IMAGETYPE_PNG);
+        $this->assertSame($small->getContent(), $this->get('/preview/hash/'.$cape->hash.'?height=100&png')->assertOk()->getContent());
 
-        $this->get(route('avatar.user', ['uid' => 0]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-
-        $user = User::factory()->create();
-        $this->get(route('avatar.user', ['uid' => $user->uid]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-
-        $this->mock(Minecraft::class, function ($mock) {
-            $mock->shouldReceive('render2dAvatar')->andReturn(Image::canvas(1, 1));
-        });
-        $texture = Texture::factory()->create();
-        $disk->put($texture->hash, '');
-        $user->avatar = $texture->tid;
-        $user->save();
-        $this->get(route('avatar.user', ['uid' => $user->uid]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-
-        Cache::clear();
-        $image = $this->get(route('avatar.user', ['uid' => $user->uid, 'png' => true]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/png')
-            ->getContent();
-        $image = Image::make($image);
-        $this->assertEquals(100, $image->width());
-        $this->assertEquals(100, $image->height());
-
-        $image = $this->get(route('avatar.user', [
-            'uid' => $user->uid,
-            'size' => 50,
-            'png' => true,
-        ]))->getContent();
-        $image = Image::make($image);
-        $this->assertEquals(50, $image->width());
-        $this->assertEquals(50, $image->height());
+        $skin = Texture::factory()->create(['hash' => TextureFixtures::put('png', 64, 32)]);
+        $this->assertImage($this->get('/preview/'.$skin->tid)->assertOk(), 400, 312, IMAGETYPE_WEBP);
+        $a = $this->get('/avatar/hash/'.$skin->hash.'?size=50&png')->assertOk();
+        $b = $this->get('/avatar/hash/'.$skin->hash.'?size=50&3d&png')->assertOk();
+        $this->assertImage($a, 50, 50, IMAGETYPE_PNG);
+        $this->assertImage($b, 50, 50, IMAGETYPE_PNG);
+        $this->assertNotSame($a->getContent(), $b->getContent());
     }
 
-    public function testAvatarByHash()
+    private function assertImage(TestResponse $response, int $width, int $height, int $format): void
     {
-        $disk = Storage::fake('textures');
-        $this->mock(Minecraft::class, function ($mock) {
-            $mock->shouldReceive('render2dAvatar')->andReturn(Image::canvas(1, 1));
-            $mock->shouldReceive('render3dAvatar')->andReturn(Image::canvas(1, 1));
-        });
-
-        $texture = Texture::factory()->create();
-        $disk->put($texture->hash, '');
-        $this->get(route('avatar.hash', ['hash' => $texture->hash]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-    }
-
-    public function testAvatarByTexture()
-    {
-        $disk = Storage::fake('textures');
-
-        $cape = Texture::factory()->cape()->create();
-        $this->get(route('avatar.texture', ['tid' => $cape->tid]))->assertStatus(422);
-
-        $this->get(route('avatar.texture', ['tid' => 0]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-        Cache::clear();
-        $image = $this->get(route('avatar.texture', ['tid' => 0, 'png' => true]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/png')
-            ->getContent();
-        $image = Image::make($image);
-        $this->assertEquals(100, $image->width());
-        $this->assertEquals(100, $image->height());
-
-        $texture = Texture::factory()->create();
-        $this->get(route('avatar.texture', ['tid' => $texture->tid]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-
-        $this->mock(Minecraft::class, function ($mock) {
-            $mock->shouldReceive('render2dAvatar')->andReturn(Image::canvas(1, 1));
-            $mock->shouldReceive('render3dAvatar')->andReturn(Image::canvas(1, 1));
-        });
-        $disk->put($texture->hash, '');
-        $this->get(route('avatar.texture', ['tid' => $texture->tid]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-
-        Cache::clear();
-        $this->get(route('avatar.texture', ['tid' => $texture->tid, 'png' => true]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/png');
-        $image = Image::make($image);
-        $this->assertEquals(100, $image->width());
-        $this->assertEquals(100, $image->height());
-        $this->assertTrue(Cache::has('avatar-2d-t'.$texture->tid.'-s100-png'));
-
-        $image = $this->get(route('avatar.texture', [
-            'tid' => $texture->tid,
-            'size' => 50,
-            'png' => true,
-        ]))->getContent();
-        $image = Image::make($image);
-        $this->assertEquals(50, $image->width());
-        $this->assertEquals(50, $image->height());
-        $this->assertTrue(Cache::has('avatar-2d-t'.$texture->tid.'-s50-png'));
-
-        $this->get(route('avatar.texture', ['tid' => $texture->tid, '3d' => true]))
-            ->assertSuccessful()
-            ->assertHeader('Content-Type', 'image/webp');
-        $this->assertTrue(Cache::has('avatar-3d-t'.$texture->tid.'-s100-webp'));
+        $this->assertSame([$width, $height, $format], array_slice(getimagesizefromstring($response->getContent()), 0, 3));
     }
 }

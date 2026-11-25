@@ -5,260 +5,102 @@ import { showModal } from '@/scripts/notify'
 
 jest.mock('@/scripts/notify')
 
-test('the GET method', async () => {
-  const json = jest.fn().mockResolvedValue({})
-  window.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json,
-    headers: new Map([['Content-Type', 'application/json']]),
-    clone: () => ({}),
-  })
-
-  const stub = jest.fn()
-  on('beforeFetch', stub)
-
-  await net.get('/abc', { a: 'b' })
-  expect(stub).toBeCalledWith({
-    method: 'GET',
-    url: '/abc',
-    data: { a: 'b' },
-  })
-  expect(window.fetch.mock.calls[0][0].url).toBe('/abc?a=b')
-  expect(json).toBeCalled()
-
-  await net.get('/abc')
-  expect(window.fetch.mock.calls[1][0].url).toBe('/abc?')
+const request = () => new Request('/abc', {})
+const json = (status: number, value: unknown, contentType = 'application/json; charset=UTF-8') => ({
+  ok: status >= 200 && status < 300,
+  status,
+  headers: new Headers({ 'Content-Type': contentType }),
+  json: jest.fn().mockResolvedValue(value),
 })
 
-test('the POST method', async () => {
-  window.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({}),
-    headers: new Map([['Content-Type', 'application/json']]),
-    clone: () => ({}),
-  })
+beforeEach(() => {
+  document.head.innerHTML = ''
+  window.fetch = jest.fn().mockResolvedValue(json(200, {}))
+})
 
+test('GET appends query parameters, not an empty delimiter', async () => {
+  const stub = jest.fn()
+  const stop = on('beforeFetch', stub)
+  await net.get('/abc', { a: 'b' })
+  await net.get('/abc')
+  await net.get('/abc?existing=1', { a: 'b' })
+  expect(stub).toHaveBeenCalledWith({ method: 'GET', url: '/abc', data: { a: 'b' } })
+  expect(window.fetch.mock.calls.map(([sent]) => sent.url)).toEqual(['/abc?a=b', '/abc', '/abc?existing=1&a=b'])
+  stop()
+})
+
+test('POST sends CSRF, supports FormData/JSON, and redacts mutation events', async () => {
   const meta = document.createElement('meta')
   meta.name = 'csrf-token'
-  meta.content = 'token'
+  meta.content = 'test-csrf-token'
   document.head.appendChild(meta)
 
   const stub = jest.fn()
-  on('beforeFetch', stub)
-
+  const stop = on('beforeFetch', stub)
   const formData = new FormData()
   await net.post('/abc', formData)
-  expect(stub).toBeCalledWith({
-    method: 'POST',
-    url: '/abc',
-    data: formData,
-  })
-
-  await net.post('/abc', { a: 'b' })
-  expect(stub).toBeCalledWith({
-    method: 'POST',
-    url: '/abc',
-    data: { a: 'b' },
-  })
-  // eslint-disable-next-line prefer-destructuring
-  const request = window.fetch.mock.calls[1][0]
-  expect(request.url).toBe('/abc')
-  expect(request.method).toBe('POST')
-  expect(request.body).toBe(JSON.stringify({ a: 'b' }))
-  expect(request.headers.get('X-CSRF-TOKEN')).toBe('token')
-  expect(request.headers.get('Content-Type')).toBe('application/json')
-
+  await net.post('/abc?token=opaque-test', { password: 'test-password' })
   await net.post('/abc')
-  expect(window.fetch.mock.calls[2][0].body).toBeUndefined()
+
+  expect(stub.mock.calls).toEqual(Array(3).fill([{ method: 'POST', url: '/abc' }]))
+  const [multipart, reset, empty] = window.fetch.mock.calls.map(([sent]) => sent)
+  expect(multipart!.body).toBe(formData)
+  expect(multipart!.headers.has('Content-Type')).toBe(false)
+  expect(reset!.url).toBe('/abc?token=opaque-test')
+  expect(reset!.headers.get('X-CSRF-TOKEN')).toBe('test-csrf-token')
+  expect(reset!.headers.get('Content-Type')).toBe('application/json')
+  expect(reset!.body).toBe(JSON.stringify({ password: 'test-password' }))
+  expect(empty!.body).toBeUndefined()
+  stop()
 })
 
-test('the PUT method', () => {
-  const fetch = jest.fn()
-  window.fetch = fetch
-
+test.each([['PUT', net.put], ['DELETE', net.del]])('%s sends the matching method', async (method, send) => {
   const stub = jest.fn()
-  on('beforeFetch', stub)
-
-  net.put('/abc')
-  expect(fetch).toBeCalled()
-  // eslint-disable-next-line prefer-destructuring
-  const request = fetch.mock.calls[0][0]
-  expect(request.method).toBe('PUT')
-
-  expect(stub).toBeCalledWith({
-    method: 'PUT',
-    url: '/abc',
-    data: undefined,
-  })
+  const stop = on('beforeFetch', stub)
+  await send('/abc', { confirmation: 'fixture' })
+  expect(window.fetch.mock.calls[0]![0].method).toBe(method)
+  expect(stub).toHaveBeenCalledWith({ method, url: '/abc' })
+  stop()
 })
 
-test('the DELETE method', () => {
-  const fetch = jest.fn()
-  window.fetch = fetch
+test('reads legal JSON MIME parameters and +json; keeps non-JSON success as text', async () => {
+  window.fetch.mockResolvedValueOnce(json(200, ['first']))
+    .mockResolvedValueOnce(json(200, ['second'], 'application/problem+json'))
+    .mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers(), text: async () => 'text' })
+  await expect(net.walkFetch(request())).resolves.toEqual(['first'])
+  await expect(net.walkFetch(request())).resolves.toEqual(['second'])
+  await expect(net.walkFetch(request())).resolves.toBe('text')
+})
 
+test('validation, CSRF, forbidden and throttled responses expose safe text and result shapes', async () => {
+  window.fetch.mockResolvedValueOnce(json(422, { errors: { name: ['Required.'] } }))
+    .mockResolvedValueOnce(json(419, { message: 'Private server wording' }))
+    .mockResolvedValueOnce(json(403, { message: 'Forbidden.' }))
+    .mockResolvedValueOnce(json(429, { message: 'Try later.' }))
+  await expect(net.walkFetch(request())).resolves.toEqual({ code: 1, message: 'Required.' })
+  await expect(net.walkFetch(request())).resolves.toEqual({ code: -1, message: t('general.csrf') })
+  expect(showModal).toHaveBeenCalledWith({ mode: 'alert', text: t('general.csrf'), type: 'warning' })
+  await expect(net.walkFetch(request())).resolves.toEqual({ code: -1, message: 'Forbidden.' })
+  expect(showModal).toHaveBeenCalledWith({ mode: 'alert', text: 'Forbidden.', type: 'warning' })
+  await expect(net.walkFetch(request())).resolves.toEqual({ code: 1, message: 'Try later.' })
+})
+
+test('never parses fatal server bodies or exposes private exception responses', async () => {
+  const server = json(500, { message: 'Private exception', trace: ['local-path'] })
+  const notFoundText = jest.fn().mockResolvedValue('<p>Private error page</p>')
+  window.fetch.mockResolvedValueOnce(server)
+    .mockResolvedValueOnce({ ok: false, status: 404, headers: new Headers(), text: notFoundText })
+    .mockRejectedValueOnce(new Error('Private socket error'))
   const stub = jest.fn()
-  on('beforeFetch', stub)
-
-  net.del('/abc')
-  expect(fetch).toBeCalled()
-  // eslint-disable-next-line prefer-destructuring
-  const request = fetch.mock.calls[0][0]
-  expect(request.method).toBe('DELETE')
-
-  expect(stub).toBeCalledWith({
-    method: 'DELETE',
-    url: '/abc',
-    data: undefined,
-  })
-})
-
-test('low level fetch', async () => {
-  const json = jest.fn().mockResolvedValue({})
-  window.fetch = jest
-    .fn()
-    .mockRejectedValueOnce(new Error('network'))
-    .mockResolvedValueOnce({
-      ok: false,
-      headers: new Map(),
-      text: () => Promise.resolve('404'),
-      clone: () => ({}),
-    })
-    .mockResolvedValueOnce({
-      ok: false,
-      json: () => Promise.resolve({ message: 'error' }),
-      headers: new Map([['Content-Type', 'application/json']]),
-      clone: () => ({}),
-    })
-    .mockResolvedValueOnce({
-      ok: true,
-      json,
-      headers: new Map([['Content-Type', 'application/json']]),
-      clone: () => ({}),
-    })
-    .mockResolvedValueOnce({
-      ok: true,
-      headers: new Map(),
-      text: () => Promise.resolve('text'),
-      clone: () => ({}),
-    })
-
-  const request: RequestInit = { headers: new Headers() }
-
-  const stub = jest.fn()
-  on('fetchError', stub)
-
-  await net.walkFetch(request as Request)
-  expect(showModal).toBeCalledWith({
-    mode: 'alert',
-    title: t('general.fatalError'),
-    dangerousHTML: 'network',
-    type: 'danger',
-    okButtonType: 'outline-light',
-  })
-  expect(stub).toBeCalledWith(expect.any(Error))
-
-  await net.walkFetch(request as Request)
-  expect(showModal).toBeCalledWith({
-    mode: 'alert',
-    title: t('general.fatalError'),
-    dangerousHTML: '404',
-    type: 'danger',
-    okButtonType: 'outline-light',
-  })
-  expect(stub.mock.calls[1][0]).toHaveProperty('message', '404')
-  expect(stub.mock.calls[1][0]).toHaveProperty('response')
-
-  await net.walkFetch(request as Request)
-  expect(showModal).toBeCalledWith({
-    mode: 'alert',
-    title: t('general.fatalError'),
-    dangerousHTML: 'error',
-    type: 'danger',
-    okButtonType: 'outline-light',
-  })
-  expect(stub.mock.calls[2][0]).toHaveProperty('message', 'error')
-  expect(stub.mock.calls[2][0]).toHaveProperty('response')
-
-  await net.walkFetch(request as Request)
-  expect(json).toBeCalled()
-
-  expect(await net.walkFetch(request as Request)).toBe('text')
-})
-
-test('process backend errors', async () => {
-  window.fetch = jest
-    .fn()
-    .mockResolvedValueOnce({
-      status: 422,
-      headers: new Map([['Content-Type', 'application/json']]),
-      json() {
-        return Promise.resolve({
-          errors: { name: ['required'] },
-        })
-      },
-      clone: () => ({}),
-    })
-    .mockResolvedValueOnce({
-      status: 419,
-      headers: new Map([['Content-Type', 'application/json']]),
-      json() {
-        return Promise.resolve({
-          message: 'CSRF token mismatched.',
-        })
-      },
-      clone: () => ({}),
-    })
-    .mockResolvedValueOnce({
-      status: 403,
-      headers: new Map([['Content-Type', 'application/json']]),
-      json() {
-        return Promise.resolve({ message: 'forbidden' })
-      },
-      clone: () => ({}),
-    })
-    .mockResolvedValueOnce({
-      status: 500,
-      headers: new Map([['Content-Type', 'application/json']]),
-      json() {
-        return Promise.resolve({
-          message: 'fake exception',
-          exception: true,
-          trace: [
-            { file: 'k.php', line: 2 },
-            { file: 'v.php', line: 3 },
-          ],
-        })
-      },
-      clone: () => ({}),
-    })
-
-  const result: {
-    code: number
-    message: string
-  } = await net.walkFetch({ headers: new Headers() } as Request)
-  expect(result.code).toBe(1)
-  expect(result.message).toBe('required')
-
-  await net.walkFetch({ headers: new Headers() } as Request)
-  expect(showModal).toBeCalledWith({
-    mode: 'alert',
-    text: t('general.csrf'),
-  })
-
-  await net.walkFetch({ headers: new Headers() } as Request)
-  expect(showModal).toBeCalledWith({
-    mode: 'alert',
-    text: 'forbidden',
-    type: 'warning',
-  })
-
-  await net.walkFetch({ headers: new Headers() } as Request)
-  expect(showModal).toBeCalledWith({
-    mode: 'alert',
-    title: t('general.fatalError'),
-    dangerousHTML:
-      'fake exception<br><details>[1] k.php#L2<br>[2] v.php#L3</details>',
-    type: 'danger',
-    okButtonType: 'outline-light',
-  })
+  const stop = on('fetchError', stub)
+  const message = t('general.fatalError')
+  for (let i = 0; i < 3; i++) {
+    await expect(net.walkFetch(request())).resolves.toEqual({ code: -1, message })
+  }
+  expect(server.json).not.toHaveBeenCalled()
+  expect(notFoundText).not.toHaveBeenCalled()
+  expect(showModal).toHaveBeenCalledWith({ mode: 'alert', title: message, text: message, type: 'danger', okButtonType: 'outline-light' })
+  expect(stub.mock.calls.map(([error]) => error.message)).toEqual(['HTTP 500', 'HTTP 404', message])
+  expect(stub.mock.calls[0]![0]).not.toHaveProperty('response')
+  stop()
 })

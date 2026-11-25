@@ -10,6 +10,7 @@ const icons = new Map<AlertType, string>([
 ])
 
 interface Props {
+  children?: React.ReactNode
   type: AlertType
 }
 

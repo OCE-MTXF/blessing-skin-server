@@ -8,10 +8,10 @@ class EnsureEmailFilledTest extends TestCase
 {
     public function testHandle()
     {
-        $noEmailUser = User::factory()->make(['email' => '']);
+        $noEmailUser = User::factory()->create(['email' => '']);
         $this->actingAs($noEmailUser)->get('/user')->assertRedirect('/auth/bind');
 
-        $normalUser = User::factory()->make();
+        $normalUser = User::factory()->create();
         $this->actingAs($normalUser)->get('/auth/bind')->assertRedirect('/user');
     }
 }

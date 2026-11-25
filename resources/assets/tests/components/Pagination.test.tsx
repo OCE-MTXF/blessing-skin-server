@@ -18,7 +18,7 @@ describe('previous page', () => {
       <Pagination page={3} totalPages={5} onChange={mock} />,
     )
     fireEvent.click(getByText(t('vendor.datatable.prev')))
-    expect(mock).toBeCalledWith(2)
+    expect(mock).toHaveBeenCalledWith(2)
   })
 
   it('disabled', () => {
@@ -27,7 +27,7 @@ describe('previous page', () => {
       <Pagination page={1} totalPages={5} onChange={mock} />,
     )
     fireEvent.click(getByText(t('vendor.datatable.prev')))
-    expect(mock).not.toBeCalled()
+    expect(mock).not.toHaveBeenCalled()
   })
 })
 
@@ -38,7 +38,7 @@ describe('next page', () => {
       <Pagination page={3} totalPages={5} onChange={mock} />,
     )
     fireEvent.click(getByText(t('vendor.datatable.next')))
-    expect(mock).toBeCalledWith(4)
+    expect(mock).toHaveBeenCalledWith(4)
   })
 
   it('disabled', () => {
@@ -47,7 +47,7 @@ describe('next page', () => {
       <Pagination page={5} totalPages={5} onChange={mock} />,
     )
     fireEvent.click(getByText(t('vendor.datatable.next')))
-    expect(mock).not.toBeCalled()
+    expect(mock).not.toHaveBeenCalled()
   })
 })
 
@@ -59,25 +59,25 @@ describe('middle pages', () => {
     )
 
     fireEvent.click(getByText('1'))
-    expect(mock).toBeCalledWith(1)
+    expect(mock).toHaveBeenCalledWith(1)
 
     fireEvent.click(getByText('2'))
-    expect(mock).toBeCalledWith(2)
+    expect(mock).toHaveBeenCalledWith(2)
 
     fireEvent.click(getByText('3'))
-    expect(mock).toBeCalledWith(3)
+    expect(mock).toHaveBeenCalledWith(3)
 
     fireEvent.click(getByText('4'))
-    expect(mock).toBeCalledWith(4)
+    expect(mock).toHaveBeenCalledWith(4)
 
     fireEvent.click(getByText('5'))
-    expect(mock).toBeCalledWith(5)
+    expect(mock).toHaveBeenCalledWith(5)
 
     fireEvent.click(getByText('6'))
-    expect(mock).toBeCalledWith(6)
+    expect(mock).toHaveBeenCalledWith(6)
 
     fireEvent.click(getByText('7'))
-    expect(mock).toBeCalledWith(7)
+    expect(mock).toHaveBeenCalledWith(7)
   })
 
   describe('pages count greater than or equals to 8', () => {
@@ -88,7 +88,7 @@ describe('middle pages', () => {
       )
 
       fireEvent.click(getByText('1'))
-      expect(mock).toBeCalledWith(1)
+      expect(mock).toHaveBeenCalledWith(1)
       expect(queryByText('1')).toBeInTheDocument()
       expect(queryByText('2')).toBeInTheDocument()
       expect(queryByText('3')).toBeInTheDocument()
@@ -96,7 +96,7 @@ describe('middle pages', () => {
       expect(queryByText('10')).toBeInTheDocument()
 
       fireEvent.click(getByText('2'))
-      expect(mock).toBeCalledWith(2)
+      expect(mock).toHaveBeenCalledWith(2)
       expect(queryByText('1')).toBeInTheDocument()
       expect(queryByText('2')).toBeInTheDocument()
       expect(queryByText('3')).toBeInTheDocument()
@@ -111,7 +111,7 @@ describe('middle pages', () => {
       )
 
       fireEvent.click(getByText('10'))
-      expect(mock).toBeCalledWith(10)
+      expect(mock).toHaveBeenCalledWith(10)
       expect(queryByText('1')).toBeInTheDocument()
       expect(queryByText('...')).toBeInTheDocument()
       expect(queryByText('8')).toBeInTheDocument()
@@ -119,7 +119,7 @@ describe('middle pages', () => {
       expect(queryByText('10')).toBeInTheDocument()
 
       fireEvent.click(getByText('9'))
-      expect(mock).toBeCalledWith(9)
+      expect(mock).toHaveBeenCalledWith(9)
       expect(queryByText('1')).toBeInTheDocument()
       expect(queryByText('...')).toBeInTheDocument()
       expect(queryByText('8')).toBeInTheDocument()
@@ -141,13 +141,13 @@ describe('middle pages', () => {
       expect(queryByText('10')).toBeInTheDocument()
 
       fireEvent.click(getByText('5'))
-      expect(mock).toBeCalledWith(5)
+      expect(mock).toHaveBeenCalledWith(5)
 
       fireEvent.click(getByText('1'))
-      expect(mock).toBeCalledWith(1)
+      expect(mock).toHaveBeenCalledWith(1)
 
       fireEvent.click(getByText('10'))
-      expect(mock).toBeCalledWith(10)
+      expect(mock).toHaveBeenCalledWith(10)
     })
   })
 })

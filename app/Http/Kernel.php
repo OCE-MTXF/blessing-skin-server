@@ -14,9 +14,12 @@ class Kernel extends HttpKernel
      * @var array<int, class-string|string>
      */
     protected $middleware = [
+        Middleware\SecurityHeaders::class,
+        Middleware\CanonicalOrigin::class,
         \Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance::class,
+        Middleware\RequireReadyInstallation::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
-        \Illuminate\Foundation\Http\Middleware\TrimStrings::class,
+        Middleware\TrimStrings::class,
         Middleware\ConvertEmptyStringsToNull::class,
         Middleware\DetectLanguagePrefer::class,
     ];
@@ -31,10 +34,10 @@ class Kernel extends HttpKernel
             \Illuminate\Cookie\Middleware\EncryptCookies::class,
             \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
             \Illuminate\Session\Middleware\StartSession::class,
+            Middleware\EnforceAccountVersion::class,
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
             Middleware\EnforceEverGreen::class,
-            Middleware\RedirectToSetup::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
 
@@ -48,6 +51,37 @@ class Kernel extends HttpKernel
             Middleware\EnsureEmailFilled::class,
             Middleware\FireUserAuthenticated::class,
         ],
+
+        'oauth-api' => [
+            \App\Services\Auth\RequireOAuthBearer::class,
+            'auth:oauth',
+            Middleware\RejectBannedUser::class,
+            Middleware\EnsureEmailFilled::class.':oauth',
+            'verified',
+        ],
+    ];
+
+    protected $middlewarePriority = [
+        \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
+        \Illuminate\Cookie\Middleware\EncryptCookies::class,
+        \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+        \Illuminate\Session\Middleware\StartSession::class,
+        Middleware\EnforceAccountVersion::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
+        \Illuminate\Routing\Middleware\ThrottleRequests::class,
+        \Illuminate\Routing\Middleware\ThrottleRequestsWithRedis::class,
+        \App\Services\Auth\RequireOAuthBearer::class,
+        \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+        Middleware\RejectBannedUser::class,
+        Middleware\EnsureEmailFilled::class,
+        Middleware\CheckUserVerified::class,
+        Middleware\CheckRole::class,
+        \Laravel\Passport\Http\Middleware\CheckToken::class,
+        \Laravel\Passport\Http\Middleware\CheckTokenForAnyScope::class,
+        \Illuminate\Contracts\Session\Middleware\AuthenticatesSessions::class,
+        \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        \Illuminate\Auth\Middleware\Authorize::class,
     ];
 
     /**
@@ -62,10 +96,9 @@ class Kernel extends HttpKernel
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
         'guest' => Middleware\RedirectIfAuthenticated::class,
         'role' => Middleware\CheckRole::class,
-        'setup' => Middleware\CheckInstallation::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => Middleware\CheckUserVerified::class,
-        'scope' => \Laravel\Passport\Http\Middleware\CheckForAnyScope::class,
-        'scopes' => \Laravel\Passport\Http\Middleware\CheckScopes::class,
+        'scope' => \Laravel\Passport\Http\Middleware\CheckTokenForAnyScope::class,
+        'scopes' => \Laravel\Passport\Http\Middleware\CheckToken::class,
     ];
 }

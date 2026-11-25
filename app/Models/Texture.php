@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use DateTimeInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -50,6 +51,21 @@ class Texture extends Model
     {
         // Don't worry about cape...
         return $this->type === 'alex' ? 'slim' : 'default';
+    }
+
+    public function fitsSlot(string $slot): bool
+    {
+        return match ($slot) {
+            'skin', 'avatar' => in_array($this->type, ['steve', 'alex'], true),
+            'cape' => $this->type === 'cape',
+            default => false,
+        };
+    }
+
+    public function scopePublished(Builder $query): Builder
+    {
+        return $query->where('textures.public', true)
+            ->whereHas('owner', fn (Builder $owner) => $owner->where('permission', '!=', User::BANNED));
     }
 
     public function scopeLike($query, $field, $value)

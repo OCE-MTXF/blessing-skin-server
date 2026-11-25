@@ -1,38 +1,44 @@
-import React, { useState, useEffect } from 'react'
-import ReactDOM from 'react-dom'
-import { nanoid } from 'nanoid'
+import { useState, useEffect } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { flushSync } from 'react-dom'
 import * as emitter from './event'
 import ToastBox, { ToastType } from '../components/Toast'
 
-type QueueElement = { id: string; type: ToastType; message: string }
-type ToastQueue = QueueElement[]
-
+type QueueElement = { id: number; type: ToastType; message: string }
 const TOAST_EVENT = Symbol('toast')
 const CLEAR_EVENT = Symbol('clear')
+let nextId = 0
 
-export const ToastContainer: React.FC = () => {
-  const [queue, setQueue] = useState<ToastQueue>([])
+export function ToastContainer() {
+  const [queue, setQueue] = useState<QueueElement[]>([])
 
-  const handleClose = (id: string) => {
-    setQueue((queue) => queue.filter((el) => el.id !== id))
+  const handleClose = (id: number) => {
+    setQueue((current) => current.filter((el) => el.id !== id))
   }
 
   useEffect(() => {
-    const off1 = emitter.on(TOAST_EVENT, (toast: QueueElement) => {
-      setQueue((queue) => {
-        queue.push(toast)
-        return queue.slice()
-      })
-
-      setTimeout(() => {
+    const timers = new Set<ReturnType<typeof setTimeout>>()
+    const clearTimers = () => {
+      timers.forEach(clearTimeout)
+      timers.clear()
+    }
+    const stopToasts = emitter.on(TOAST_EVENT, (toast: QueueElement) => {
+      setQueue((current) => [...current, toast])
+      const timer = setTimeout(() => {
+        timers.delete(timer)
         handleClose(toast.id)
       }, 3100)
+      timers.add(timer)
     })
-    const off2 = emitter.on(CLEAR_EVENT, () => setQueue([]))
+    const stopClear = emitter.on(CLEAR_EVENT, () => {
+      clearTimers()
+      setQueue([])
+    })
 
     return () => {
-      off1()
-      off2()
+      stopToasts()
+      stopClear()
+      clearTimers()
     }
   }, [])
 
@@ -53,33 +59,39 @@ export const ToastContainer: React.FC = () => {
 }
 
 export class Toast {
-  private container: HTMLDivElement
+  private container?: HTMLDivElement
+  private root?: Root
 
   constructor(render?: (element: JSX.Element) => void) {
-    this.container = document.createElement('div')
-    document.body.appendChild(this.container)
-
     if (render) {
       render(<ToastContainer />)
     } else {
-      ReactDOM.render(<ToastContainer />, this.container)
+      this.container = document.createElement('div')
+      document.body.appendChild(this.container)
+      this.root = createRoot(this.container)
+      // Subscribe before the first notification can be sent.
+      flushSync(() => this.root?.render(<ToastContainer />))
     }
   }
 
+  private push(type: ToastType, message: string) {
+    emitter.emit(TOAST_EVENT, { id: nextId++, type, message })
+  }
+
   success(message: string) {
-    emitter.emit(TOAST_EVENT, { id: nanoid(4), type: 'success', message })
+    this.push('success', message)
   }
 
   info(message: string) {
-    emitter.emit(TOAST_EVENT, { id: nanoid(4), type: 'info', message })
+    this.push('info', message)
   }
 
   warning(message: string) {
-    emitter.emit(TOAST_EVENT, { id: nanoid(4), type: 'warning', message })
+    this.push('warning', message)
   }
 
   error(message: string) {
-    emitter.emit(TOAST_EVENT, { id: nanoid(4), type: 'error', message })
+    this.push('error', message)
   }
 
   clear() {
@@ -87,7 +99,7 @@ export class Toast {
   }
 
   dispose() {
-    ReactDOM.unmountComponentAtNode(this.container)
-    this.container.remove()
+    this.root?.unmount()
+    this.container?.remove()
   }
 }

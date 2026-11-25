@@ -1,7 +1,7 @@
 import React from 'react'
 import { t } from '@/scripts/i18n'
 import ButtonEdit from '@/components/ButtonEdit'
-import type { App } from './types'
+import { redirectText, type App } from './types'
 
 interface Props {
   app: App
@@ -23,9 +23,9 @@ const Row: React.FC<Props> = (props) => {
           onClick={props.onEditName}
         />
       </td>
-      <td>{app.secret}</td>
+      <td>{app.plain_secret ?? '—'}</td>
       <td>
-        <span>{app.redirect}</span>
+        <span>{redirectText(app)}</span>
         <ButtonEdit
           title={t('user.oauth.modifyUrl')}
           onClick={props.onEditRedirect}

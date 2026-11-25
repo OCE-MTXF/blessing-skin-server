@@ -3,6 +3,7 @@
 namespace App\Http\View\Composers;
 
 use App\Events;
+use App\Models\User;
 use App\Services\Plugin;
 use App\Services\PluginManager;
 use Blessing\Filter;
@@ -76,14 +77,21 @@ class SideMenuComposer
 
     public function collectPluginConfigs(array &$menu)
     {
-        $menu = array_map(function ($item) {
+        $canConfigure = $this->request->user()?->permission === User::SUPER_ADMIN;
+        $menu = array_map(function ($item) use ($canConfigure) {
+            if (!$canConfigure && Arr::get($item, 'link') === 'admin/i18n') {
+                return null;
+            }
             if (Arr::get($item, 'id') === 'plugin-configs') {
+                if (!$canConfigure) {
+                    return null;
+                }
                 $pluginConfigs = resolve(PluginManager::class)
                     ->getEnabledPlugins()
                     ->filter(fn (Plugin $plugin) => $plugin->hasConfig())
                     ->map(function ($plugin) {
                         return [
-                            'title' => trans($plugin->title),
+                            'title' => $plugin->displayTitle(),
                             'link' => 'admin/plugins/config/'.$plugin->name,
                             'icon' => 'fa-circle',
                         ];

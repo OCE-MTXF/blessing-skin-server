@@ -27,14 +27,15 @@ class ResetPlayersTest extends TestCase
         $playerOfUploader = Player::factory()->create([
             'uid' => $texture->uploader,
             'tid_skin' => $texture->tid,
+            'tid_cape' => $texture->tid,
         ]);
+        $texture->owner->update(['avatar' => $texture->tid]);
 
         event('texture.privacy.updated', [$texture]);
-        $player->refresh();
-        $playerOfUploader->refresh();
-        $texture->refresh();
-        $this->assertEquals(0, $player->tid_skin);
-        $this->assertEquals($texture->tid, $playerOfUploader->tid_skin);
+        $this->assertSame(0, $player->fresh()->tid_skin);
+        $this->assertSame(0, $playerOfUploader->fresh()->tid_skin);
+        $this->assertSame(0, $playerOfUploader->fresh()->tid_cape);
+        $this->assertSame(0, $texture->owner->fresh()->avatar);
     }
 
     public function testDeletedTexture()

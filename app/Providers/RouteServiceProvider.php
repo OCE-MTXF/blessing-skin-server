@@ -3,10 +3,13 @@
 namespace App\Providers;
 
 use App\Events\ConfigureRoutes;
+use App\Services\Auth\AccountIdentity;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Str;
 
 class RouteServiceProvider extends ServiceProvider
 {
@@ -16,22 +19,24 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected $namespace = 'App\Http\Controllers';
 
+    public function boot(): void
+    {
+        foreach (['api' => 60, 'asset-source' => 300, 'asset-render' => 120, 'asset-upload' => 10, 'broadcast' => 4] as $name => $limit) {
+            RateLimiter::for($name, static fn (Request $request) => Limit::perMinute($limit)->by(AccountIdentity::source($request)));
+        }
+
+        parent::boot();
+    }
+
     /**
      * Define the routes for the application.
      */
     public function map(Router $router): void
     {
         $this->mapStaticRoutes($router);
-
         $this->mapWebRoutes($router);
-
         $this->mapApiRoutes();
-
-        foreach ($router->getRoutes()->getRoutesByName() as $name => $route) {
-            if (Str::startsWith($name, ['passport.authorizations', 'passport.tokens', 'passport.clients'])) {
-                $route->middleware(['auth', 'verified']);
-            }
-        }
+        require base_path('routes/oauth.php');
 
         event(new ConfigureRoutes($router));
     }
@@ -64,9 +69,7 @@ class RouteServiceProvider extends ServiceProvider
     protected function mapApiRoutes(): void
     {
         Route::prefix('api')
-            ->middleware(
-                config('app.env') == 'testing' ? ['api'] : ['api', 'throttle:60,1']
-            )
+            ->middleware(['api', 'throttle:api'])
             ->namespace($this->namespace)
             ->group(base_path('routes/api.php'));
     }

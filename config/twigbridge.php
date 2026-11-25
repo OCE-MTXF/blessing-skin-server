@@ -36,7 +36,7 @@ return [
             // When set to true, the generated templates have a __toString() method
             // that you can use to display the generated nodes.
             // default: false
-            'debug' => env('APP_DEBUG', false),
+            'debug' => false,
 
             // The charset used by the templates.
             // default: utf-8
@@ -112,7 +112,6 @@ return [
 
             'TwigBridge\Extension\Laravel\Auth',
             'TwigBridge\Extension\Laravel\Config',
-            'TwigBridge\Extension\Laravel\Dump',
             'TwigBridge\Extension\Laravel\Input',
             'TwigBridge\Extension\Laravel\Session',
             'TwigBridge\Extension\Laravel\Str',

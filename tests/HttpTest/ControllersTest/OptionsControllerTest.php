@@ -3,8 +3,9 @@
 namespace Tests;
 
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
 use Mockery;
 
 class OptionsControllerTest extends BrowserKitTestCase
@@ -50,11 +51,10 @@ class OptionsControllerTest extends BrowserKitTestCase
         $this->assertEquals('copyright', option('copyright_text'));
 
         $this->visit('/admin/customize')
-            ->type('css', 'custom_css')
-            ->type('js', 'custom_js')
-            ->press('submit_customJsCss');
-        $this->assertEquals('css', option('custom_css'));
-        $this->assertEquals('js', option('custom_js'));
+            ->dontSee('name="custom_css"')
+            ->dontSee('name="custom_js"');
+        $this->assertNull(option('custom_css'));
+        $this->assertNull(option('custom_js'));
     }
 
     public function testScore()
@@ -106,7 +106,6 @@ class OptionsControllerTest extends BrowserKitTestCase
         $this->visit('/admin/options')
             ->type('My Site', 'site_name')
             ->type('hi', 'site_description')
-            ->type('http://blessing.skin/', 'site_url')
             ->type('8', 'regs_per_ip')
             ->type('2048', 'max_upload_file_size')
             ->see(trans(
@@ -115,7 +114,6 @@ class OptionsControllerTest extends BrowserKitTestCase
             ))
             ->select('cjk', 'player_name_rule')
             ->type('/^([0-9]+)$/', 'custom_player_name_regexp')
-            ->check('auto_del_invalid_texture')
             ->uncheck('allow_downloading_texture')
             ->select('404', 'status_code_for_private')
             ->type('abc', 'texture_name_regexp')
@@ -123,21 +121,14 @@ class OptionsControllerTest extends BrowserKitTestCase
             ->press('submit_general');
         $this->assertEquals('My Site', option_localized('site_name'));
         $this->assertEquals('hi', option_localized('site_description'));
-        $this->assertEquals('http://blessing.skin', option('site_url'));
         $this->assertEquals('8', option('regs_per_ip'));
         $this->assertEquals('2048', option('max_upload_file_size'));
         $this->assertEquals('cjk', option('player_name_rule'));
         $this->assertEquals('/^([0-9]+)$/', option('custom_player_name_regexp'));
-        $this->assertTrue(option('auto_del_invalid_texture'));
         $this->assertFalse(option('allow_downloading_texture'));
         $this->assertEquals('404', option('status_code_for_private'));
         $this->assertEquals('abc', option('texture_name_regexp'));
         $this->assertEquals('policy', option_localized('content_policy'));
-
-        $this->visit('/admin/options')
-            ->type('http://blessing.skin/index.php', 'site_url')
-            ->press('submit_general');
-        $this->assertEquals('http://blessing.skin', option('site_url'));
 
         $this->visit('/admin/options')
             ->type('announcement', 'announcement')
@@ -147,50 +138,63 @@ class OptionsControllerTest extends BrowserKitTestCase
         $this->visit('/admin/options')
             ->type('kw', 'meta_keywords')
             ->type('desc', 'meta_description')
-            ->type('<meta>', 'meta_extras')
             ->press('submit_meta');
         $this->visit('/')
             ->see('<meta name="keywords" content="kw">')
-            ->see('<meta name="description" content="desc">')
-            ->see('<meta>');
+            ->see('<meta name="description" content="desc">');
 
         $this->visit('/admin/options')
-            ->type('key', 'recaptcha_sitekey')
-            ->type('secret', 'recaptcha_secretkey')
-            ->check('recaptcha_invisible')
-            ->press('submit_recaptcha');
-        $this->assertEquals('key', option('recaptcha_sitekey'));
-        $this->assertEquals('secret', option('recaptcha_secretkey'));
-        $this->assertTrue(option('recaptcha_invisible'));
+            ->dontSee('name="site_url"')
+            ->dontSee('name="meta_extras"')
+            ->dontSee('name="recaptcha_secretkey"')
+            ->dontSee('name="auto_del_invalid_texture"');
     }
 
     public function testResource()
     {
         $this->visit('/admin/resource')
-            ->check('force_ssl')
-            ->uncheck('auto_detect_asset_url')
-            ->type('0', 'cache_expire_time')
-            ->type('url/', 'cdn_address')
-            ->press('submit_resources');
-        $this->assertTrue(option('force_ssl'));
-        $this->assertFalse(option('auto_detect_asset_url'));
-        $this->assertEquals('0', option('cache_expire_time'));
-
-        $this->visit('/admin/resource')
-            ->type('', 'cdn_address')
-            ->press('submit_resources');
-
-        $this->visit('/admin/resource')
             ->see(trans('options.cache.driver', ['driver' => config('cache.default')]))
+            ->dontSee('name="cdn_address"')
+            ->dontSee('name="force_ssl"')
             ->check('enable_avatar_cache')
             ->check('enable_preview_cache')
             ->press('submit_cache');
         $this->assertTrue(option('enable_avatar_cache'));
         $this->assertTrue(option('enable_preview_cache'));
 
-        Cache::shouldReceive('flush');
-        $this->visit('/admin/resource')
-            ->click(trans('options.cache.clear'))
-            ->see(trans('options.cache.cleared'));
+        Cache::forever('rendered-textures:generation', 'previous-renditions');
+        Cache::forever('unrelated-cache-entry', 'retained');
+        $this->visit('/admin/resource?clear-cache=1')->seeStatusCode(200);
+        $this->assertSame('previous-renditions', Cache::get('rendered-textures:generation'));
+        $this->visit('/admin/resource')->press(trans('options.cache.clear-renditions'))
+            ->see(trans('options.cache.renditions-cleared'));
+        $this->assertMatchesRegularExpression('/\A[a-f0-9]{32}\z/', Cache::get('rendered-textures:generation'));
+        $this->assertSame('retained', Cache::get('unrelated-cache-entry'));
+    }
+
+    public function testResourceInvalidationRequiresPostWithCsrfAndAnAdmin(): void
+    {
+        $this->app->instance(VerifyCsrfToken::class, new class($this->app, $this->app['encrypter']) extends VerifyCsrfToken
+        {
+            protected function runningUnitTests(): bool
+            {
+                return false;
+            }
+        });
+        Cache::forever('rendered-textures:generation', 'before');
+
+        $this->call('GET', '/admin/resource/cache')->assertStatus(405);
+        $this->call('POST', '/admin/resource/cache')->assertStatus(419);
+        $this->assertSame('before', Cache::get('rendered-textures:generation'));
+
+        $token = $this->app['session']->token();
+        $this->assertNotEmpty($token);
+        $this->actingAs(User::factory()->create());
+        $this->call('POST', '/admin/resource/cache', ['_token' => $token])->assertForbidden();
+        $this->assertSame('before', Cache::get('rendered-textures:generation'));
+
+        $this->actingAs(User::factory()->admin()->create());
+        $this->call('POST', '/admin/resource/cache', ['_token' => $token])->assertRedirect(route('admin.resource'));
+        $this->assertMatchesRegularExpression('/\A[a-f0-9]{32}\z/', Cache::get('rendered-textures:generation'));
     }
 }

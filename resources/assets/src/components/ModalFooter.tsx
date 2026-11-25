@@ -9,6 +9,7 @@ export interface Props {
 }
 
 interface InternalProps {
+  children?: React.ReactNode
   showCancelButton: boolean
   onConfirm?(): void
   onDismiss?(): void

@@ -10,12 +10,16 @@ use App\Models\Player;
 use App\Models\Texture;
 use App\Models\User;
 use App\Rules;
+use App\Services\Textures\TextureReferences;
 use Blessing\Filter;
 use Blessing\Rejection;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PlayerController extends Controller
 {
@@ -24,7 +28,7 @@ class PlayerController extends Controller
         $this->middleware(function (Request $request, $next) {
             /** @var Player */
             $player = $request->route('player');
-            if ($player->user->isNot($request->user())) {
+            if ($player->uid !== $request->user()?->uid) {
                 return json(trans('admin.players.no-permission'), 1)
                     ->setStatusCode(403);
             }
@@ -98,27 +102,26 @@ class PlayerController extends Controller
             return json($can->getReason(), 1);
         }
 
-        if ($user->score < (int) option('score_per_player')) {
-            return json(trans('user.player.add.lack-score'), 7);
-        }
+        return DB::transaction(function () use ($user, $name, $dispatcher) {
+            $user = User::lockForUpdate()->findOrFail($user->uid);
+            $cost = (int) option('score_per_player');
+            if ($user->score < $cost) {
+                return json(trans('user.player.add.lack-score'), 7);
+            }
+            $dispatcher->dispatch('player.adding', [$name, $user]);
+            event(new PlayerWillBeAdded($name));
+            $player = new Player();
+            $player->uid = $user->uid;
+            $player->name = $name;
+            $player->tid_skin = 0;
+            $player->tid_cape = 0;
+            $this->saveWithUniqueName($player);
+            $user->decrement('score', $cost);
+            $dispatcher->dispatch('player.added', [$player, $user]);
+            event(new PlayerWasAdded($player));
 
-        $dispatcher->dispatch('player.adding', [$name, $user]);
-        event(new PlayerWillBeAdded($name));
-
-        $player = new Player();
-        $player->uid = $user->uid;
-        $player->name = $name;
-        $player->tid_skin = 0;
-        $player->tid_cape = 0;
-        $player->save();
-
-        $user->score -= (int) option('score_per_player');
-        $user->save();
-
-        $dispatcher->dispatch('player.added', [$player, $user]);
-        event(new PlayerWasAdded($player));
-
-        return json(trans('user.player.add.success', ['name' => $name]), 0, $player->toArray());
+            return json(trans('user.player.add.success', ['name' => $name]), 0, $player->toArray());
+        });
     }
 
     public function delete(
@@ -177,17 +180,29 @@ class PlayerController extends Controller
             return json($can->getReason(), 1);
         }
 
-        $old = $player->replicate();
-        $player->name = $name;
-        $player->save();
+        return DB::transaction(function () use ($player, $request, $dispatcher, $name) {
+            $player = Player::lockForUpdate()->findOrFail($player->pid);
+            abort_unless($player->uid === $request->user()->uid, 403);
+            $old = $player->replicate();
+            $player->name = $name;
+            $this->saveWithUniqueName($player);
+            $dispatcher->dispatch('player.renamed', [$player, $old]);
 
-        $dispatcher->dispatch('player.renamed', [$player, $old]);
+            return json(
+                trans('user.player.rename.success', ['old' => $old->name, 'new' => $name]),
+                0,
+                $player->toArray()
+            );
+        });
+    }
 
-        return json(
-            trans('user.player.rename.success', ['old' => $old->name, 'new' => $name]),
-            0,
-            $player->toArray()
-        );
+    private function saveWithUniqueName(Player $player): void
+    {
+        try {
+            $player->save();
+        } catch (UniqueConstraintViolationException) {
+            throw ValidationException::withMessages(['name' => trans('validation.unique', ['attribute' => 'name'])]);
+        }
     }
 
     public function setTexture(
@@ -195,39 +210,49 @@ class PlayerController extends Controller
         Dispatcher $dispatcher,
         Filter $filter,
         Player $player,
+        TextureReferences $references,
     ) {
-        /** @var User */
-        $user = auth()->user();
+        $data = $request->validate([
+            'skin' => ['nullable', 'integer'],
+            'cape' => ['nullable', 'integer'],
+        ]);
+        $uid = $request->user()->uid;
 
-        foreach (['skin', 'cape'] as $type) {
-            $tid = $request->input($type);
-
-            $can = $filter->apply('can_set_texture', true, [$player, $type, $tid]);
-            if ($can instanceof Rejection) {
-                return json($can->getReason(), 1);
-            }
-
-            if ($tid) {
-                $texture = Texture::find($tid);
-                if (empty($texture)) {
+        return DB::transaction(function () use ($player, $uid, $data, $dispatcher, $filter, $references) {
+            // Sort locks when changing two slots, then lock user and player in that order.
+            $ids = array_unique(array_map('intval', array_filter($data, fn ($tid) => (int) $tid > 0)));
+            $textures = Texture::whereIn('tid', $ids)->orderBy('tid')->lockForUpdate()->get()->keyBy('tid');
+            $user = User::lockForUpdate()->findOrFail($uid);
+            $player = Player::lockForUpdate()->findOrFail($player->pid);
+            abort_unless($player->uid === $uid && $user->permission !== User::BANNED, 403);
+            $updates = [];
+            foreach (['skin', 'cape'] as $slot) {
+                $tid = $data[$slot] ?? null;
+                $can = $filter->apply('can_set_texture', true, [$player, $slot, $tid]);
+                if ($can instanceof Rejection) {
+                    return json($can->getReason(), 1);
+                }
+                if (!$tid) {
+                    continue;
+                }
+                $texture = $textures->get($tid);
+                if (!$texture) {
                     return json(trans('skinlib.non-existent'), 1);
                 }
-
-                if ($user->closet()->where('texture_tid', $tid)->doesntExist()) {
+                if (!$references->accepts($user, $texture, $slot)) {
                     return json(trans('user.closet.remove.non-existent'), 1);
                 }
-
+                $updates[$slot] = $texture;
+            }
+            foreach ($updates as $slot => $texture) {
                 $dispatcher->dispatch('player.texture.updating', [$player, $texture]);
-
-                $field = "tid_$type";
-                $player->$field = $tid;
+                $player->{'tid_'.$slot} = $texture->tid;
                 $player->save();
-
                 $dispatcher->dispatch('player.texture.updated', [$player, $texture]);
             }
-        }
 
-        return json(trans('user.player.set.success', ['name' => $player->name]), 0, $player->toArray());
+            return json(trans('user.player.set.success', ['name' => $player->name]), 0, $player->toArray());
+        });
     }
 
     public function clearTexture(
@@ -236,25 +261,29 @@ class PlayerController extends Controller
         Filter $filter,
         Player $player,
     ) {
-        $types = $request->input('type', []);
+        $data = $request->validate(['type' => ['sometimes', 'array', 'max:2'], 'type.*' => [Rule::in(['skin', 'cape'])]]);
 
-        foreach (['skin', 'cape'] as $type) {
-            $can = $filter->apply('can_clear_texture', true, [$player, $type]);
-            if ($can instanceof Rejection) {
-                return json($can->getReason(), 1);
+        return DB::transaction(function () use ($player, $request, $data, $filter, $dispatcher) {
+            $player = Player::lockForUpdate()->findOrFail($player->pid);
+            abort_unless($player->uid === $request->user()->uid, 403);
+            $clear = [];
+            foreach (['skin', 'cape'] as $slot) {
+                $can = $filter->apply('can_clear_texture', true, [$player, $slot]);
+                if ($can instanceof Rejection) {
+                    return json($can->getReason(), 1);
+                }
+                if ($request->has($slot) || in_array($slot, $data['type'] ?? [], true)) {
+                    $clear[] = $slot;
+                }
             }
-
-            if ($request->has($type) || in_array($type, $types)) {
-                $dispatcher->dispatch('player.texture.resetting', [$player, $type]);
-
-                $field = "tid_$type";
-                $player->$field = 0;
+            foreach ($clear as $slot) {
+                $dispatcher->dispatch('player.texture.resetting', [$player, $slot]);
+                $player->{'tid_'.$slot} = 0;
                 $player->save();
-
-                $dispatcher->dispatch('player.texture.reset', [$player, $type]);
+                $dispatcher->dispatch('player.texture.reset', [$player, $slot]);
             }
-        }
 
-        return json(trans('user.player.clear.success', ['name' => $player->name]), 0, $player->toArray());
+            return json(trans('user.player.clear.success', ['name' => $player->name]), 0, $player->toArray());
+        });
     }
 }

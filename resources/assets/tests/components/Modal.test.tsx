@@ -64,11 +64,11 @@ describe('modal body', () => {
     expect(queryByText('L2')).toBeInTheDocument()
   })
 
-  it('dangerous HTML', () => {
-    const { getByText } = render(
-      <Modal dangerousHTML="<h1 class='h1'>ab</h1>" show />,
-    )
-    expect(getByText('ab')).toHaveClass('h1')
+  it('shows response text literally rather than inserting HTML', () => {
+    const text = '<h1>Server message</h1>'
+    const { getByText, queryByRole } = render(<Modal text={text} show />)
+    expect(getByText(text).tagName).toBe('P')
+    expect(queryByRole('heading', { name: 'Server message' })).toBeNull()
   })
 
   describe('input control', () => {
@@ -137,7 +137,7 @@ describe('"alert" mode', () => {
       <Modal mode="alert" onConfirm={resolve} show />,
     )
     fireEvent.click(getByText(t('general.confirm')))
-    expect(resolve).toBeCalledWith({ value: '' })
+    expect(resolve).toHaveBeenCalledWith({ value: '' })
     expect(queryByText(t('general.cancel'))).toBeNull()
   })
 
@@ -161,8 +161,8 @@ describe('"confirm" mode', () => {
       <Modal mode="prompt" onConfirm={resolve} onDismiss={reject} show />,
     )
     fireEvent.click(getByText(t('general.confirm')))
-    expect(resolve).toBeCalledWith({ value: '' })
-    expect(reject).not.toBeCalled()
+    expect(resolve).toHaveBeenCalledWith({ value: '' })
+    expect(reject).not.toHaveBeenCalled()
   })
 
   it('"cancel" button', () => {
@@ -172,8 +172,8 @@ describe('"confirm" mode', () => {
       <Modal mode="prompt" onConfirm={resolve} onDismiss={reject} show />,
     )
     fireEvent.click(getByText(t('general.cancel')))
-    expect(resolve).not.toBeCalled()
-    expect(reject).toBeCalled()
+    expect(resolve).not.toHaveBeenCalled()
+    expect(reject).toHaveBeenCalled()
   })
 })
 
@@ -194,8 +194,8 @@ describe('"prompt" mode', () => {
       target: { value: 'my' },
     })
     fireEvent.click(getByText(t('general.confirm')))
-    expect(resolve).toBeCalledWith({ value: 'my' })
-    expect(reject).not.toBeCalled()
+    expect(resolve).toHaveBeenCalledWith({ value: 'my' })
+    expect(reject).not.toHaveBeenCalled()
   })
 
   it('cancel dialog', () => {
@@ -205,8 +205,8 @@ describe('"prompt" mode', () => {
       <Modal mode="prompt" onConfirm={resolve} onDismiss={reject} show />,
     )
     fireEvent.click(getByText(t('general.cancel')))
-    expect(resolve).not.toBeCalled()
-    expect(reject).toBeCalled()
+    expect(resolve).not.toHaveBeenCalled()
+    expect(reject).toHaveBeenCalled()
   })
 
   it('radio inputs', () => {
@@ -226,7 +226,7 @@ describe('"prompt" mode', () => {
     )
     fireEvent.click(getByLabelText('B'))
     fireEvent.click(getByText(t('general.confirm')))
-    expect(resolve).toBeCalledWith({ value: 'b' })
+    expect(resolve).toHaveBeenCalledWith({ value: 'b' })
   })
 
   it('validate input', () => {
@@ -244,8 +244,8 @@ describe('"prompt" mode', () => {
       />,
     )
     fireEvent.click(getByText(t('general.confirm')))
-    expect(resolve).toBeCalledWith({ value: 'val' })
-    expect(reject).not.toBeCalled()
+    expect(resolve).toHaveBeenCalledWith({ value: 'val' })
+    expect(reject).not.toHaveBeenCalled()
   })
 
   it('report validator message', () => {
@@ -267,8 +267,8 @@ describe('"prompt" mode', () => {
 
     fireEvent.click(getByText(t('general.confirm')))
     expect(queryByText(message)).toBeInTheDocument()
-    expect(resolve).not.toBeCalled()
-    expect(reject).not.toBeCalled()
+    expect(resolve).not.toHaveBeenCalled()
+    expect(reject).not.toHaveBeenCalled()
   })
 })
 
@@ -277,13 +277,13 @@ describe('"onClose" event', () => {
     const mock = jest.fn()
     const { getByText } = render(<Modal show mode="confirm" onClose={mock} />)
     fireEvent.click(getByText(t('general.confirm')))
-    expect(mock).toBeCalled()
+    expect(mock).toHaveBeenCalled()
   })
 
   it('button cancel', () => {
     const mock = jest.fn()
     const { getByText } = render(<Modal show mode="confirm" onClose={mock} />)
     fireEvent.click(getByText(t('general.cancel')))
-    expect(mock).toBeCalled()
+    expect(mock).toHaveBeenCalled()
   })
 })

@@ -2,154 +2,63 @@ name: CI
 
 on:
   push:
-    branches:
-      - dev
-    paths-ignore:
-      - 'resources/lang/**'
-      - '**.md'
+    branches: [main, master, dev]
   pull_request:
-    branches:
-      - dev
-    paths-ignore:
-      - 'resources/lang/**'
-      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  php-lint:
-    name: PHP Linting
-    runs-on: ubuntu-latest
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - name: Checkout without retained credentials
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          php-version: 8.3
-          coverage: none
-          extensions: mbstring, dom, fileinfo, gd, imagick
-      - name: Install dependencies
+          persist-credentials: false
+      - name: Build pinned PHP and frontend toolchain
+        run: docker build --target toolchain --tag blessing-ci:toolchain .
+      - name: Run dependency checks and isolated tests
         run: |
-          composer install --prefer-dist --no-progress
-      - name: Prepare
+          mkdir -p "$RUNNER_TEMP/blessing-ci"
+          git ls-files -z | tar --null -T - -cf - | tar -xf - -C "$RUNNER_TEMP/blessing-ci"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP/blessing-ci:/workspace" \
+            --env COMPOSER_HOME=/tmp/composer --env NPM_CONFIG_CACHE=/tmp/npm \
+            --env APP_ENV=testing --env APP_DEBUG=false --env APP_URL=http://localhost \
+            --env DB_CONNECTION=sqlite --env DB_DATABASE=:memory: \
+            blessing-ci:toolchain sh -eu -c '
+              mkdir -p bootstrap/cache
+              composer validate --strict --no-check-publish
+              composer install --no-interaction --no-progress --prefer-dist --no-plugins --no-scripts
+              composer check-platform-reqs
+              composer audit --locked --no-interaction
+              php artisan package:discover --no-interaction --no-ansi
+              find app bootstrap config database routes tests tools -name "*.php" -print0 | xargs -0 -n1 php -l
+              npm ci --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund
+              npm audit --registry=https://registry.npmjs.org
+              npm run lint
+              npm run type:check
+              npm test -- --runInBand
+              npm run build
+              php vendor/bin/phpunit
+            '
+      - name: Build the unprivileged runtime image
+        run: docker build --tag blessing-ci:runtime .
+      - name: Confirm clean runtime is closed and health is read-only
         run: |
-          cp .env.example .env
-          mkdir -p resources/views/overrides
-      - name: Validate Twig templates
-        run: php artisan twig:lint -v
-      - name: Check coding style
-        run: ./vendor/bin/php-cs-fixer fix --dry-run --stop-on-violation --diff --format=txt
-  php:
-    name: PHP ${{ matrix.php }} Tests
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        php: ['8.2', '8.3']
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup PHP only
-        uses: shivammathur/setup-php@v2
-        if: matrix.php != '8.3'
-        with:
-          php-version: ${{ matrix.php }}
-          coverage: none
-          extensions: mbstring, dom, fileinfo, sqlite, gd, zip, imagick
-      - name: Setup PHP with Xdebug
-        uses: shivammathur/setup-php@v2
-        if: matrix.php == '8.3'
-        with:
-          php-version: ${{ matrix.php }}
-          coverage: xdebug
-          extensions: mbstring, dom, fileinfo, sqlite, gd, zip, imagick
-      - name: Cache Composer dependencies
-        uses: actions/cache@v3
-        with:
-          path: vendor
-          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
-      - name: Install Composer dependencies
-        run: composer install --no-progress --prefer-dist --optimize-autoloader
-      - name: Run tests only
-        if: matrix.php != '8.3'
-        run: ./vendor/bin/phpunit
-      - name: Run tests with coverage report
-        if: matrix.php == '8.3'
-        run: ./vendor/bin/phpunit --coverage-clover=coverage.xml
-      - name: Upload coverage report
-        uses: codecov/codecov-action@v1
-        if: matrix.php == '8.3' && success()
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          name: github-actions
-  lint:
-    name: Frontend Linting
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
-      - name: Run checks
-        run: |
-          yarn lint
-          yarn fmt:check
-          yarn type:check
-  jest:
-    name: Frontend Tests
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Install dependencies
-        run: yarn
-      - name: Run tests
-        run: yarn test --coverage
-      - name: Upload coverage report
-        uses: codecov/codecov-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          name: github-actions
-  build:
-    name: Snapshot Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: 8.2
-          coverage: none
-          extensions: mbstring, dom, fileinfo, sqlite, gd, zip, imagick
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Cache Node dependencies
-        uses: actions/cache@v3
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-yarn-lock-${{ hashFiles('yarn.lock') }}
-          restore-keys: ${{ runner.os }}-yarn-lock-
-      - name: Cache Composer dependencies
-        uses: actions/cache@v3
-        with:
-          path: vendor
-          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-
-      - name: Install dependencies
-        run: |
-          composer install --prefer-dist --no-progress --no-dev
-          yarn install --frozen-lockfile
-      - name: Build frontend
-        run: |
-          yarn build
-          cp resources/assets/src/images/bg.webp public/app/
-          cp resources/assets/src/images/favicon.ico public/app/
-      - uses: benjlevesque/short-sha@v3.0
-        id: short-sha
-      - name: Archive release
-        run: zip -9 -r blessing-skin-server-${{ steps.short-sha.outputs.sha }}.zip app bootstrap config database plugins public resources/lang resources/views resources/misc/textures routes storage vendor .env.example artisan LICENSE README.md README-zh.md index.html
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          if-no-files-found: error
-          name: blessing-skin-server-${{ steps.short-sha.outputs.sha }}.zip
-          path: blessing-skin-server-${{ steps.short-sha.outputs.sha }}.zip
+          test "$(docker image inspect --format '{{.Config.User}}' blessing-ci:runtime)" = www-data
+          container=$(docker run --rm --detach --read-only -p 127.0.0.1::8080 \
+            --tmpfs /tmp:rw,nosuid,nodev --tmpfs /var/lib/blessing:rw,nosuid,nodev,uid=33,gid=33,mode=0700 \
+            --env APP_URL=https://skin.example.test --env DB_CONNECTION=sqlite --env DB_DATABASE=/var/lib/blessing/smoke.sqlite \
+            blessing-ci:runtime)
+          trap 'docker stop "$container" >/dev/null || true' EXIT
+          endpoint=$(docker port "$container" 8080/tcp)
+          status=$(curl --retry 12 --retry-connrefused --retry-delay 1 --max-time 5 \
+            -sS -o "$RUNNER_TEMP/blessing-health.txt" -w '%{http_code}' "http://$endpoint/healthz")
+          test "$status" = 503
+          grep -Fxq 'Service Unavailable' "$RUNNER_TEMP/blessing-health.txt"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "http://$endpoint/setup")" = 404
+          test "$(curl -sS -o /dev/null -w '%{http_code}' "http://$endpoint/app/favicon.ico")" = 200

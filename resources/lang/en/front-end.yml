@@ -60,14 +60,15 @@ skinlib:
   setAsPrivate: Set as Private
   setAsPublic: Set as Public
   setPublicNotice: Sure to set this as public texture?
-  setPrivateNotice: Sure to set this as private texture?
+  setPrivateNotice: Make this texture private? It will be removed from player profiles, user avatars, and other users' closets.
+  publishToUse: Make private textures public before applying them to a player or using them as an avatar.
   deleteNotice: Are you sure to delete this texture?
   setNewTextureModel: 'Please select a new texture model:'
   upload:
     texture-name: Texture Name
     texture-type: Texture Type
     select-file: Select File
-    privacy-notice: Prevent it from being visible at skin library.
+    privacy-notice: Only the uploader and administrators can access private textures. Private textures are not served to games.
     set-as-private: Make it Private
     button: Upload
     cost: It costs you about :score score.
@@ -84,7 +85,7 @@ skinlib:
     upload-at: Upload At
     download: Download
     delete-texture: Delete Texture
-    manage-notice: The texture which was deleted or setted to private will be removed from the closet of everyone who had favorited it.
+    manage-notice: Making this texture private keeps it in the uploader's closet but removes it from other users' closets, player profiles, and user avatars. Deleting it removes it from all closets.
   report:
     title: Report
     reason: Tell us reason please.
@@ -93,6 +94,7 @@ skinlib:
 
 user:
   signRemainingTime: 'Available after :time :unit'
+  signUnavailable: You cannot sign again yet. Refresh the page for the latest status.
   timeUnitHour: h
   timeUnitMin: min
   emptyClosetMsg: >-
@@ -120,6 +122,7 @@ user:
   useAs: Apply...
   resetSelected: Clear selected
   closet:
+    empty: Your closet is empty.
     upload: Upload Texture
     use-as:
       title: Which player should be applied to?
@@ -160,7 +163,8 @@ admin:
   changeEmail: Edit Email
   newUserEmail: 'Please enter the new email:'
   verification: Email Verification
-  toggleVerification: Toggle Verification Status
+  revokeVerification: Revoke Email Verification
+  sendVerification: Send Verification Email
   changeNickName: Edit Nickname
   newUserNickname: 'Please enter the new nickname:'
   changePassword: Edit Password
@@ -169,7 +173,8 @@ admin:
   newScore: 'Please enter the new score:'
   changePermission: Change permission
   newPermission: 'Please select new permission:'
-  deleteUserNotice: Are you sure to delete this user? It' permanent.
+  deleteUserNotice: Are you sure you want to permanently delete this user?
+  deleteUserPassword: Enter your current password to delete this user.
   banned: Banned
   normal: Normal
   admin: Admin
@@ -177,8 +182,7 @@ admin:
   unverified: Unverified
   verified: Verified
   pidNotice: >-
-    Please enter the tid of texture. Inputing 0 can clear texture of this
-    player.
+    Enter a public texture ID from the player's owner's closet, or 0 to clear it.
   changeTexture: Change Textures
   changePlayerName: Change Player Name
   changeOwner: Change Owner

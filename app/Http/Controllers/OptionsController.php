@@ -6,12 +6,24 @@ use App\Services\Facades\Option;
 use App\Services\OptionForm;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class OptionsController extends Controller
 {
     public function customize(Request $request)
     {
+        $navbarColors = [
+            'primary', 'secondary', 'success', 'danger', 'indigo',
+            'purple', 'pink', 'teal', 'cyan', 'dark', 'gray',
+            'fuchsia', 'maroon', 'olive', 'navy',
+            'lime', 'light', 'warning', 'white', 'orange',
+        ];
+        $sidebarColors = [
+            'primary', 'warning', 'info', 'danger', 'success', 'indigo',
+            'navy', 'purple', 'fuchsia', 'pink', 'maroon', 'orange',
+            'lime', 'teal', 'olive',
+        ];
+
         $homepage = Option::form('homepage', OptionForm::AUTO_DETECT, function ($form) {
             $form->text('home_pic_url')->hint();
 
@@ -39,41 +51,22 @@ class OptionsController extends Controller
             Option::set('copyright_text_'.config('app.locale'), request('copyright_text'));
         });
 
-        $customJsCss = Option::form('customJsCss', OptionForm::AUTO_DETECT, function ($form) {
-            $form->textarea('custom_css', 'CSS')->rows(6);
-            $form->textarea('custom_js', 'JavaScript')->rows(6);
-        })->addMessage()->handle();
-
         if ($request->isMethod('post') && $request->input('action') === 'color') {
             $navbar = $request->input('navbar');
-            if ($navbar) {
+            if (in_array($navbar, $navbarColors, true)) {
                 option(['navbar_color' => $navbar]);
             }
 
             $sidebar = $request->input('sidebar');
-            if ($sidebar) {
+            if (is_string($sidebar) && preg_match('/\A(?:dark|light)-([a-z]+)\z/', $sidebar, $matches)
+                && in_array($matches[1], $sidebarColors, true)) {
                 option(['sidebar_color' => $sidebar]);
             }
         }
 
         return view('admin.customize', [
-            'colors' => [
-                'navbar' => [
-                    'primary', 'secondary', 'success', 'danger', 'indigo',
-                    'purple', 'pink', 'teal', 'cyan', 'dark', 'gray',
-                    'fuchsia', 'maroon', 'olive', 'navy',
-                    'lime', 'light', 'warning', 'white', 'orange',
-                ],
-                'sidebar' => [
-                    'primary', 'warning', 'info', 'danger', 'success', 'indigo',
-                    'navy', 'purple', 'fuchsia', 'pink', 'maroon', 'orange',
-                    'lime', 'teal', 'olive',
-                ],
-            ],
-            'forms' => [
-                'homepage' => $homepage,
-                'custom_js_css' => $customJsCss,
-            ],
+            'colors' => ['navbar' => $navbarColors, 'sidebar' => $sidebarColors],
+            'forms' => ['homepage' => $homepage],
             'extra' => [
                 'navbar' => option('navbar_color'),
                 'sidebar' => option('sidebar_color'),
@@ -140,20 +133,6 @@ class OptionsController extends Controller
             $form->text('site_name');
             $form->text('site_description')->description();
 
-            $form->text('site_url')
-                ->hint()
-                ->format(function ($url) {
-                    if (Str::endsWith($url, '/')) {
-                        $url = substr($url, 0, -1);
-                    }
-
-                    if (Str::endsWith($url, '/index.php')) {
-                        $url = substr($url, 0, -10);
-                    }
-
-                    return $url;
-                });
-
             $form->checkbox('register_with_player_name')->label();
             $form->checkbox('require_verification')->label();
 
@@ -181,8 +160,6 @@ class OptionsController extends Controller
                 ->text('player_name_length_max')
                 ->addon(trans('options.general.player_name_length.suffix'));
 
-            $form->checkbox('auto_del_invalid_texture')->label()->hint();
-
             $form->checkbox('allow_downloading_texture')->label();
 
             $form->select('status_code_for_private')
@@ -207,64 +184,34 @@ class OptionsController extends Controller
         $meta = Option::form('meta', OptionForm::AUTO_DETECT, function ($form) {
             $form->text('meta_keywords')->hint();
             $form->text('meta_description')->hint();
-            $form->textarea('meta_extras')->rows(6);
         })->handle();
 
-        $recaptcha = Option::form('recaptcha', 'reCAPTCHA', function ($form) {
-            $form->text('recaptcha_sitekey', 'sitekey');
-            $form->text('recaptcha_secretkey', 'secretkey');
-            $form->checkbox('recaptcha_invisible')->label();
-        })->handle();
-
-        return view('admin.options')
-            ->with('forms', compact('general', 'announ', 'meta', 'recaptcha'));
+        return view('admin.options')->with('forms', compact('general', 'announ', 'meta'));
     }
 
-    public function resource(Request $request)
+    public function resource()
     {
-        $resources = Option::form('resources', OptionForm::AUTO_DETECT, function ($form) {
-            $form->checkbox('force_ssl')->label()->hint();
-            $form->checkbox('auto_detect_asset_url')->label()->description();
-
-            $form->text('cache_expire_time')->hint(OptionForm::AUTO_DETECT);
-            $form->text('cdn_address')
-                ->hint(OptionForm::AUTO_DETECT)
-                ->description(OptionForm::AUTO_DETECT);
-        })
-            ->type('primary')
-            ->hint(OptionForm::AUTO_DETECT)
-            ->after(function () {
-                $cdnAddress = request('cdn_address');
-                if ($cdnAddress == null) {
-                    $cdnAddress = '';
-                }
-                if (Str::endsWith($cdnAddress, '/')) {
-                    $cdnAddress = substr($cdnAddress, 0, -1);
-                }
-                Option::set('cdn_address', $cdnAddress);
-            })
-            ->handle();
-
         $cache = Option::form('cache', OptionForm::AUTO_DETECT, function ($form) {
             $form->checkbox('enable_avatar_cache')->label();
             $form->checkbox('enable_preview_cache')->label();
         })
             ->type('warning')
-            ->addButton([
-                'text' => trans('options.cache.clear'),
-                'type' => 'a',
-                'class' => 'float-right',
-                'style' => 'warning',
-                'href' => '?clear-cache',
-            ])
-            ->addMessage(trans('options.cache.driver', ['driver' => config('cache.default')]), 'info');
+            ->addMessage(trans('options.cache.driver', ['driver' => config('cache.default')]), 'info')
+            ->handle();
 
-        if ($request->has('clear-cache')) {
-            Cache::flush();
-            $cache->addMessage(trans('options.cache.cleared'), 'success');
-        }
-        $cache->handle();
+        return view('admin.resource')->with('forms', compact('cache'));
+    }
 
-        return view('admin.resource')->with('forms', compact('resources', 'cache'));
+    public function clearResourceCache(Request $request)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $changed = Cache::forever('rendered-textures:generation', bin2hex(random_bytes(16)));
+        abort_unless($changed, 503);
+        Log::notice('Rendered texture cache invalidated.', [
+            'actor_id' => $request->user()->getAuthIdentifier(),
+        ]);
+
+        return redirect()->route('admin.resource')->with('rendition_cache_cleared', true);
     }
 }

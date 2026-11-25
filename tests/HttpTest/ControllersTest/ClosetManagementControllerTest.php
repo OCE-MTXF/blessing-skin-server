@@ -6,7 +6,9 @@ use App\Models\Texture;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Passport\Passport;
+use Tests\Support\TextureFixtures;
 
 class ClosetManagementControllerTest extends TestCase
 {
@@ -25,15 +27,16 @@ class ClosetManagementControllerTest extends TestCase
         $admin->closet()->attach($texture->tid);
 
         Passport::actingAs($admin, ['ClosetManagement.Read'], 'oauth');
-        $this->getJson('/api/admin/closet/'.$admin->uid)
-            ->assertJson([['tid' => $texture->tid]]);
+        $this->getJson('/api/admin/closet/'.$admin->uid, ['Authorization' => 'Bearer test-fixture'])
+            ->assertOk()->assertJson([['tid' => $texture->tid]]);
     }
 
     public function testAdd()
     {
         Event::fake();
+        Storage::fake('textures');
         $user = User::factory()->create();
-        $texture = Texture::factory()->create();
+        $texture = Texture::factory()->create(['hash' => TextureFixtures::put()]);
 
         $this->postJson('/admin/closet/'.$user->uid, ['tid' => $texture->tid])
             ->assertJson([

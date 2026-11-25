@@ -44,7 +44,6 @@ class FootComposer
         $view->with([
             'i18n' => $this->javascript->generate(app()->getLocale()),
             'scripts' => $scripts,
-            'inline_js' => option('custom_js'),
         ]);
     }
 

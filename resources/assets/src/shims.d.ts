@@ -1,4 +1,3 @@
-import JQuery from 'jquery'
 import { ModalOptions, ModalResult } from './components/Modal'
 import { Toast } from './scripts/toast'
 
@@ -23,8 +22,8 @@ declare global {
     }
 
     event: {
-      on(eventName: string, listener: Function): void
-      emit(eventName: string, payload: object): void
+      on(eventName: string | symbol, listener: (payload: unknown) => unknown): () => void
+      emit(eventName: string | symbol, payload?: unknown): void
     }
 
     notify: {

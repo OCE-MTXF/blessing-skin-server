@@ -54,6 +54,9 @@ return [
         'textures' => [
             'driver' => env('FS_DRIVER', 'local'),
             'root' => env('TEXTURES_DIR', storage_path('textures')),
+            'visibility' => 'private',
+            'directory_visibility' => 'private',
+            'throw' => true,
         ],
 
         'testing' => [

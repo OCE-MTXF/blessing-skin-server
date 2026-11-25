@@ -2,16 +2,27 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Auth\AccountIdentity;
 use Closure;
+use Illuminate\Http\Request;
 
 class EnsureEmailFilled
 {
-    public function handle($request, Closure $next)
+    public function handle(Request $request, Closure $next, ?string $guard = null)
     {
-        if ($request->user()->email != '' && $request->is('auth/bind')) {
-            return redirect('/user');
-        } elseif ($request->user()->email == '' && !$request->is('auth/bind')) {
-            return redirect('/auth/bind');
+        $hasEmail = AccountIdentity::canMail($request->user($guard)?->email);
+        if ($guard === 'oauth') {
+            abort_unless($hasEmail, 403);
+
+            return $next($request);
+        }
+
+        $binding = $request->routeIs('auth.bind.*');
+        if ($binding && $hasEmail) {
+            return redirect()->route('user.home');
+        }
+        if (!$binding && !$hasEmail) {
+            return redirect()->route('auth.bind.view');
         }
 
         return $next($request);

@@ -3,34 +3,32 @@
 namespace Tests;
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Auth\Events\Authenticated;
 
 class SetAppLocaleTest extends TestCase
 {
-    use DatabaseTransactions;
-
-    public function testUpdateUserLocale()
-    {
-        $user = User::factory()->create();
-
-        // This is a hacky way.
-        // We must call `get` first before set authentication,
-        // since this let Laravel update the `Request` instance,
-        // otherwise the event handler will be called first and
-        // it won't be able to retrieve request information.
-        $this->get('/?lang=en');
-        $this->actingAs($user);
-
-        $this->assertEquals('en', $user->fresh()->locale);
-    }
-
-    public function testSetAppLocale()
+    public function testExplicitLanguageDoesNotModifyAnAccountOnGet(): void
     {
         $user = User::factory()->create(['locale' => 'zh_CN']);
+        $this->get('/?lang=en_US')->assertOk()->assertCookie('locale', 'en', false);
+        event(new Authenticated('web', $user));
 
-        event(new \Illuminate\Auth\Events\Authenticated('web', $user));
-        $this->assertEquals('zh_CN', app()->getLocale());
+        $this->assertSame('zh_CN', $user->fresh()->locale);
+        $this->assertSame('en', app()->getLocale());
+    }
 
+    public function testPersistedLanguageIsRestrictedToTheWebGuardAndSupportedLanguages(): void
+    {
+        $user = User::factory()->create(['locale' => 'zh_CN']);
         app()->setLocale('en');
+
+        event(new Authenticated('oauth', $user));
+        $this->assertSame('en', app()->getLocale());
+        event(new Authenticated('web', $user));
+        $this->assertSame('zh_CN', app()->getLocale());
+
+        $user->locale = 'not-configured';
+        event(new Authenticated('web', $user));
+        $this->assertSame('zh_CN', app()->getLocale());
     }
 }

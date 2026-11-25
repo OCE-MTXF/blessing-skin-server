@@ -2,27 +2,15 @@
 
 namespace App\Listeners;
 
-use App\Models\Player;
 use App\Models\Texture;
+use App\Services\Textures\TextureReferences;
 
 class ResetPlayers
 {
-    public function handle(Texture $texture)
+    public function handle(Texture $texture): void
     {
-        // no need to update players
-        // if texture was switched from "private" to "public"
-        if ($texture->exists && $texture->public) {
-            return;
+        if (!$texture->exists || !$texture->public) {
+            app(TextureReferences::class)->detachSlots($texture);
         }
-
-        $type = $texture->type == 'cape' ? 'tid_cape' : 'tid_skin';
-        $query = Player::where($type, $texture->tid);
-
-        // texture was switched from "private" to "public"
-        if ($texture->exists) {
-            $query = $query->where('uid', '<>', $texture->uploader);
-        }
-
-        $query->update([$type => 0]);
     }
 }

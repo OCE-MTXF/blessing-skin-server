@@ -1,17 +1,9 @@
 - **简体中文**
 - [English](./README.md)
 
-<p align="center"><img src="https://media.githubusercontent.com/media/bs-community/logo/main/logo.png"></p>
+# Blessing Skin 6.0.3 · PHP 8.6
 
-<p align="center">
-<a href="https://github.com/bs-community/blessing-skin-server/actions"><img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/bs-community/blessing-skin-server/CI?style=flat-square"></a>
-<a href="https://codecov.io/gh/bs-community/blessing-skin-server"><img alt="Codecov" src="https://img.shields.io/codecov/c/github/bs-community/blessing-skin-server?style=flat-square"></a>
-<a href="https://github.com/bs-community/blessing-skin-server/releases"><img alt="GitHub release (latest SemVer including pre-releases)" src="https://img.shields.io/github/v/release/bs-community/blessing-skin-server?include_prereleases&style=flat-square"></a>
-<a href="https://github.com/bs-community/blessing-skin-server/blob/master/LICENSE"><img alt="GitHub" src="https://img.shields.io/github/license/bs-community/blessing-skin-server?style=flat-square"></a>
-<a href="https://discord.com/invite/QAsyEyt"><img alt="Discord" src="https://discord.com/api/guilds/761226550921658380/widget.png"></a>
-</p>
-
-优雅的开源 Minecraft 皮肤站，现在，回应您的等待。
+这是从 [Blessing Skin](https://github.com/bs-community/blessing-skin-server) 6.0.2 派生的 PHP 8.6 安全维护版本，不是上游官方发布。
 
 Blessing Skin 是一款能让您上传、管理和分享您的 Minecraft 皮肤和披风的 Web 应用程序。与修改游戏材质包不同的是，所有人都能在游戏中看到各自的皮肤和披风（当然，前提是玩家们要使用同一个皮肤站）。
 
@@ -37,36 +29,19 @@ Blessing Skin 是一个开源的 PHP 项目，这意味着您可以自由地在�
 
 ## 环境要求
 
-Blessing Skin 对您的服务器有一定的要求。在大多数情况下，下列所需的 PHP 扩展已经开启。
+使用 PHP 8.6（已验证 8.6.0）、支持 PNG/WebP 的 GD、OpenSSL、Argon2id 和对应的 PDO 驱动。仅将 `public/` 设为 HTTPS Web 根。详见[部署指南](docs/deployment/README.md)；本版本无需 Imagick。
 
-- 一台支持 URL 重写的主机，Nginx 或 Apache
-- PHP >= 8.1.0
-- 安装并启用如下 PHP 扩展：
-  - OpenSSL >= 1.1.1 (TLS 1.3)
-  - PDO
-  - Mbstring
-  - Tokenizer
-  - GD
-  - XML
-  - Ctype
-  - JSON
-  - fileinfo
-  - zip
-  - Imagick
+## 安装和升级
 
-## 快速使用
-
-请参阅 [安装指南](https://blessing.netlify.app/setup.html)。
+从可信渠道获取并验证本地发布包后，使用 `php artisan bs:install` 安装、`php artisan bs:upgrade` 升级。Web 安装向导及核心自动更新已移除。升级前需协调备份数据库、密钥、私有配置和材质文件；6.0.2 迁移与恢复方法见[部署指南](docs/deployment/README.md)。
 
 ## 插件系统
 
-Blessing Skin 提供了强大的插件系统，您可以通过添加多种多样的插件来为您的皮肤站添加功能。
+默认禁用插件。只允许部署人员在公开目录和可写状态目录以外部署经审阅且散列固定的审批清单与插件代码，不能从 Web 下载执行第三方代码。
 
 ## 自行构建
 
-详情可阅读 [这里](https://blessing.netlify.app/build.html)。
-
-> 您可以订阅我们的 Telegram 频道 [Blessing Skin News](https://t.me/blessing_skin_news) 来获取最新开发动态。当有新的 Commit 被推送时，我们的机器人将会在频道内发送一条消息来提示您能否拉取最新代码，以及拉取后应该做什么。
+[锁定构建和打包方法](docs/deployment/release.md)会从干净临时目录生成只含生产依赖与允许列表文件的归档。
 
 ## 国际化（i18n）
 
@@ -74,14 +49,13 @@ Blessing Skin 可支持多种语言，当前支持英语、简体中文和西班
 
 如果您愿意将您的翻译贡献出来，欢迎参与 [我们的 Crowdin 项目](https://crowdin.com/project/blessing-skin)。
 
-## 问题报告
+## 文档
 
-请参阅 [报告问题的正确姿势](https://blessing.netlify.app/report.html)。
+- [部署、升级与回滚](docs/deployment/README.md)
+- [插件规约](docs/plugin-policy.md)
+- [材质策略](docs/texture-policy.md)
 
-## 相关链接
-
-- [用户手册](https://blessing.netlify.app/)
-- [插件开发文档](https://bs-plugin.netlify.app/)
+报告问题时，提供版本、运行拓扑和已脱敏的最少错误信息；不要上传完整日志、配置、数据库、令牌或密钥。上游手册中的 Web 安装、在线更新及旧插件说明不适用于本版本。
 
 ## 版权
 

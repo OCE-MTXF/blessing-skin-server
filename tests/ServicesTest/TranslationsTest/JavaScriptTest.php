@@ -2,123 +2,39 @@
 
 namespace Tests;
 
-use App\Services\Plugin;
 use App\Services\PluginManager;
 use App\Services\Translations\JavaScript;
-use Illuminate\Cache\Repository;
-use Illuminate\Filesystem\Filesystem;
-use Illuminate\Support\Str;
+use Tests\Support\PluginFixture;
 
 class JavaScriptTest extends TestCase
 {
-    protected function setUp(): void
+    public function testInertSnapshotIncludesOnlyActivePluginMessages(): void
     {
-        parent::setUp();
-        app()->forgetInstance(JavaScript::class);
+        $fixture = new PluginFixture($this->beforeApplicationDestroyed(...));
+        $fixture->package('demo');
+        mkdir($fixture->directory.'/demo/lang/en', 0700, true);
+        file_put_contents($fixture->directory.'/demo/lang/en/front-end.yml', "welcome: '[Local text] & friends'\n");
+        $approved = [
+            'name' => 'demo',
+            'version' => '1.2.3',
+            'sha256' => \App\Services\PluginPackage::inspect($fixture->directory.DIRECTORY_SEPARATOR.'demo')['sha256'],
+        ];
+        $fixture->approve($approved);
+        $manager = $fixture->manager();
+        $this->app->instance(PluginManager::class, $manager);
+        $translations = new JavaScript($manager);
+        $this->assertSame(trans('front-end', [], 'en'), $translations->generate('en'));
+
+        $fixture->select($approved);
+        $manager->boot();
+        $this->assertSame('[Local text] & friends', $translations->generate('en')['demo']['welcome']);
+        $this->assertFileDoesNotExist(public_path('lang/en.js'));
     }
 
-    public function testGenerateFreshFile()
+    public function testFallbackLocaleUsesInertData(): void
     {
-        $this->mock(PluginManager::class, function ($mock) {
-            $mock->shouldReceive('getEnabledPlugins')
-                ->with()
-                ->once()
-                ->andReturn(collect([new Plugin('/reina', ['namespace' => 'れいな'])]));
-        });
-        $this->mock(Filesystem::class, function ($mock) {
-            $mock->shouldReceive('exists')
-                ->with('/reina/lang/en/front-end.yml')
-                ->once()
-                ->andReturn(true);
-            $mock->shouldReceive('lastModified')
-                ->with(resource_path('lang/en/front-end.yml'))
-                ->once()
-                ->andReturn(1);
-            $mock->shouldReceive('lastModified')
-                ->with('/reina/lang/en/front-end.yml')
-                ->once()
-                ->andReturn(2);
-            $mock->shouldReceive('put')
-                ->withArgs(function ($path, $content) {
-                    $this->assertEquals(public_path('lang/en.js'), $path);
-                    $this->assertTrue(Str::startsWith($content, 'blessing.i18n'));
-                    $this->assertStringContainsString('"れいな::front-end"', $content);
-
-                    return true;
-                })
-                ->once()
-                ->andReturn(1);
-        });
-        $this->mock(Repository::class, function ($mock) {
-            $mock->shouldReceive('get')
-                ->with('front-end-trans-en', 0)
-                ->once()
-                ->andReturn(0);
-            $mock->shouldReceive('put')
-                ->with('front-end-trans-en', 2)
-                ->once();
-        });
-
-        $this->assertEquals(
-            url('lang/en.js?t=2'),
-            resolve(JavaScript::class)->generate('en')
-        );
-    }
-
-    public function testGenerateCached()
-    {
-        $this->mock(PluginManager::class, function ($mock) {
-            $mock->shouldReceive('getEnabledPlugins')
-                ->with()
-                ->once()
-                ->andReturn(collect([new Plugin('/reina', ['namespace' => 'れいな'])]));
-        });
-        $this->mock(Filesystem::class, function ($mock) {
-            $mock->shouldReceive('exists')
-                ->with('/reina/lang/en/front-end.yml')
-                ->once()
-                ->andReturn(true);
-            $mock->shouldReceive('lastModified')
-                ->with(resource_path('lang/en/front-end.yml'))
-                ->once()
-                ->andReturn(1);
-            $mock->shouldReceive('lastModified')
-                ->with('/reina/lang/en/front-end.yml')
-                ->once()
-                ->andReturn(2);
-            $mock->shouldReceive('exists')
-                ->with(public_path('lang/en.js'))
-                ->once()
-                ->andReturn(true);
-        });
-        $this->mock(Repository::class, function ($mock) {
-            $mock->shouldReceive('get')
-                ->with('front-end-trans-en', 0)
-                ->once()
-                ->andReturn(2);
-        });
-
-        $this->assertEquals(
-            url('lang/en.js?t=2'),
-            resolve(JavaScript::class)->generate('en')
-        );
-    }
-
-    public function testResetTime()
-    {
-        $this->spy(Repository::class, function ($spy) {
-            $spy->shouldReceive('put')
-                ->with('front-end-trans-en', 0)
-                ->once();
-        });
-
-        resolve(JavaScript::class)->resetTime('en');
-    }
-
-    public function testFallbackLocale()
-    {
-        $this->get('/', ['Accept-Language' => 'xyz'])
-            ->assertSuccessful()
-            ->assertSee('lang/en.js');
+        $this->get('/', ['Accept-Language' => 'xyz'])->assertOk()
+            ->assertSee('<script type="application/json" id="blessing-i18n">', false)
+            ->assertDontSee('/lang/en.js');
     }
 }

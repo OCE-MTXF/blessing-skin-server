@@ -1,42 +1,31 @@
 <?php
 
-namespace Tests;
+namespace Tests\RulesTest;
 
 use App\Rules\Captcha;
-use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
 
 class CaptchaTest extends TestCase
 {
-    public function testCharactersCaptcha()
+    public function testChallengeIsCaseInsensitiveAndConsumedOnlyOnce(): void
     {
-        session(['captcha' => 'abc']);
+        session(['captcha' => ['phrase' => 'ABC', 'expires_at' => time() + 60]]);
         $rule = new Captcha();
-        $this->assertFalse($rule->passes('captcha', 'abcd'));
-        $this->assertEquals(trans('validation.captcha'), $rule->message());
-        $this->assertNull(session('captcha'));
 
-        session(['captcha' => 'abc']);
-        $rule = new Captcha();
         $this->assertTrue($rule->passes('captcha', 'abc'));
         $this->assertNull(session('captcha'));
+        $this->assertFalse($rule->passes('captcha', 'abc'));
     }
 
-    public function testRecaptcha()
+    public function testExpiredAndIncorrectChallengesAreRejected(): void
     {
-        option(['recaptcha_secretkey' => 'secret']);
-        Http::fake(Http::response(['success' => true]));
-
         $rule = new Captcha();
-        $this->assertTrue($rule->passes('captcha', 'value'));
-        $this->assertEquals(trans('validation.recaptcha'), $rule->message());
-        Http::assertSent(function (Request $request) {
-            $this->assertEquals(
-                ['secret' => 'secret', 'response' => 'value'],
-                $request->data()
-            );
-
-            return true;
-        });
+        session(['captcha' => ['phrase' => 'abc', 'expires_at' => time() - 1]]);
+        $this->assertFalse($rule->passes('captcha', 'abc'));
+        $this->assertNull(session('captcha'));
+        session(['captcha' => ['phrase' => 'abc', 'expires_at' => time() + 60]]);
+        $this->assertFalse($rule->passes('captcha', 'xyz'));
+        $this->assertNull(session('captcha'));
+        $this->assertSame(trans('validation.captcha'), $rule->message());
     }
 }

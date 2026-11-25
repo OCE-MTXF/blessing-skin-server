@@ -31,7 +31,7 @@ test('search players', async () => {
 
   const { getByTitle, getByText } = render(<PlayersManagement />)
   await waitFor(() =>
-    expect(fetch.get).toBeCalledWith(urls.admin.players.list(), {
+    expect(fetch.get).toHaveBeenCalledWith(urls.admin.players.list(), {
       q: '',
       page: 1,
     }),
@@ -42,7 +42,7 @@ test('search players', async () => {
   })
   fireEvent.click(getByText(t('vendor.datatable.search')))
   await waitFor(() =>
-    expect(fetch.get).toBeCalledWith(urls.admin.players.list(), {
+    expect(fetch.get).toHaveBeenCalledWith(urls.admin.players.list(), {
       q: 's',
       page: 1,
     }),
@@ -53,7 +53,7 @@ test('preview textures', async () => {
   fetch.get.mockResolvedValue(createPaginator([fixture]))
 
   const { getByText, queryByAltText } = render(<PlayersManagement />)
-  await waitFor(() => expect(fetch.get).toBeCalled())
+  await waitFor(() => expect(fetch.get).toHaveBeenCalled())
 
   fireEvent.click(getByText(t('general.player.previews')))
 
@@ -83,7 +83,7 @@ describe('update player name', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changePlayerName')))
     fireEvent.input(getByDisplayValue(fixture.name), {
       target: { value: '' },
@@ -91,7 +91,7 @@ describe('update player name', () => {
     fireEvent.click(getByText(t('general.confirm')))
 
     expect(queryByText(t('admin.emptyPlayerName'))).toBeInTheDocument()
-    expect(fetch.put).not.toBeCalled()
+    expect(fetch.put).not.toHaveBeenCalled()
 
     fireEvent.click(getByText(t('general.cancel')))
 
@@ -105,7 +105,7 @@ describe('update player name', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changePlayerName')))
     fireEvent.input(getByDisplayValue(fixture.name), {
       target: { value: 'reina' },
@@ -113,7 +113,7 @@ describe('update player name', () => {
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(urls.admin.players.name(fixture.pid), {
+      expect(fetch.put).toHaveBeenCalledWith(urls.admin.players.name(fixture.pid), {
         player_name: 'reina',
       }),
     )
@@ -129,7 +129,7 @@ describe('update player name', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changePlayerName')))
     fireEvent.input(getByDisplayValue(fixture.name), {
       target: { value: 'reina' },
@@ -137,7 +137,7 @@ describe('update player name', () => {
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(urls.admin.players.name(fixture.pid), {
+      expect(fetch.put).toHaveBeenCalledWith(urls.admin.players.name(fixture.pid), {
         player_name: 'reina',
       }),
     )
@@ -155,11 +155,11 @@ describe('update owner', () => {
   it('cancelled', async () => {
     const { getByText, queryByText } = render(<PlayersManagement />)
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changeOwner')))
     fireEvent.click(getByText(t('general.cancel')))
 
-    expect(fetch.put).not.toBeCalled()
+    expect(fetch.put).not.toHaveBeenCalled()
     expect(
       queryByText(`${t('general.player.owner')}: ${fixture.uid}`),
     ).toBeInTheDocument()
@@ -172,7 +172,7 @@ describe('update owner', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changeOwner')))
     fireEvent.input(getByDisplayValue(fixture.uid.toString()), {
       target: { value: '2' },
@@ -180,7 +180,7 @@ describe('update owner', () => {
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(urls.admin.players.owner(fixture.pid), {
+      expect(fetch.put).toHaveBeenCalledWith(urls.admin.players.owner(fixture.pid), {
         uid: 2,
       }),
     )
@@ -196,7 +196,7 @@ describe('update owner', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changeOwner')))
     fireEvent.input(getByDisplayValue(fixture.uid.toString()), {
       target: { value: '2' },
@@ -204,7 +204,7 @@ describe('update owner', () => {
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(urls.admin.players.owner(fixture.pid), {
+      expect(fetch.put).toHaveBeenCalledWith(urls.admin.players.owner(fixture.pid), {
         uid: 2,
       }),
     )
@@ -224,11 +224,11 @@ describe('update texture', () => {
   it('cancelled', async () => {
     const { getByText } = render(<PlayersManagement />)
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changeTexture')))
     fireEvent.click(getByText(t('general.cancel')))
 
-    expect(fetch.put).not.toBeCalled()
+    expect(fetch.put).not.toHaveBeenCalled()
   })
 
   it('skin', async () => {
@@ -238,7 +238,7 @@ describe('update texture', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changeTexture')))
     fireEvent.input(getByLabelText('TID'), {
       target: { value: '2' },
@@ -246,7 +246,7 @@ describe('update texture', () => {
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(
+      expect(fetch.put).toHaveBeenCalledWith(
         urls.admin.players.texture(fixture.pid),
         {
           type: 'skin',
@@ -265,7 +265,7 @@ describe('update texture', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changeTexture')))
     fireEvent.click(getByLabelText(t('general.cape')))
     fireEvent.input(getByLabelText('TID'), {
@@ -274,7 +274,7 @@ describe('update texture', () => {
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(
+      expect(fetch.put).toHaveBeenCalledWith(
         urls.admin.players.texture(fixture.pid),
         {
           type: 'cape',
@@ -293,7 +293,7 @@ describe('update texture', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.changeTexture')))
     fireEvent.input(getByLabelText('TID'), {
       target: { value: '2' },
@@ -301,7 +301,7 @@ describe('update texture', () => {
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(
+      expect(fetch.put).toHaveBeenCalledWith(
         urls.admin.players.texture(fixture.pid),
         {
           type: 'skin',
@@ -322,11 +322,11 @@ describe('delete player', () => {
   it('cancelled', async () => {
     const { getByText, queryByText } = render(<PlayersManagement />)
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.deletePlayer')))
     fireEvent.click(getByText(t('general.cancel')))
 
-    expect(fetch.del).not.toBeCalled()
+    expect(fetch.del).not.toHaveBeenCalled()
     expect(queryByText(fixture.name)).toBeInTheDocument()
   })
 
@@ -337,12 +337,12 @@ describe('delete player', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.deletePlayer')))
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(urls.admin.players.delete(fixture.pid)),
+      expect(fetch.del).toHaveBeenCalledWith(urls.admin.players.delete(fixture.pid)),
     )
     expect(queryByText('ok')).toBeInTheDocument()
     expect(queryByRole('status')).toHaveClass('alert-success')
@@ -356,12 +356,12 @@ describe('delete player', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByText(t('admin.deletePlayer')))
     fireEvent.click(getByText(t('general.confirm')))
 
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(urls.admin.players.delete(fixture.pid)),
+      expect(fetch.del).toHaveBeenCalledWith(urls.admin.players.delete(fixture.pid)),
     )
     expect(queryByText('failed')).toBeInTheDocument()
     expect(queryByRole('alert')).toHaveClass('alert-danger')
@@ -379,7 +379,7 @@ describe('table mode', () => {
 
     const { queryByText } = render(<PlayersManagement />)
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     expect(queryByText(t('admin.operationsTitle'))).toBeInTheDocument()
 
     Object.assign(window, { innerWidth: 500 })
@@ -388,7 +388,7 @@ describe('table mode', () => {
   it('update player name', async () => {
     const { getByText, getByTitle, queryByText } = render(<PlayersManagement />)
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByTitle('Table Mode'))
     fireEvent.click(getByTitle(t('admin.changePlayerName')))
     expect(queryByText(t('admin.changePlayerNameNotice'))).toBeInTheDocument()
@@ -399,7 +399,7 @@ describe('table mode', () => {
   it('update owner', async () => {
     const { getByText, getByTitle, queryByText } = render(<PlayersManagement />)
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByTitle('Table Mode'))
     fireEvent.click(getByTitle(t('admin.changeOwner')))
     expect(queryByText(t('admin.changePlayerOwner'))).toBeInTheDocument()
@@ -412,7 +412,7 @@ describe('table mode', () => {
       <PlayersManagement />,
     )
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByTitle('Table Mode'))
     fireEvent.click(getByText(t('admin.changeTexture')))
     expect(queryByPlaceholderText(t('admin.pidNotice'))).toBeInTheDocument()
@@ -423,7 +423,7 @@ describe('table mode', () => {
   it('delete player', async () => {
     const { getByText, getByTitle, queryByText } = render(<PlayersManagement />)
 
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
     fireEvent.click(getByTitle('Table Mode'))
     fireEvent.click(getByText(t('admin.deletePlayer')))
     expect(queryByText(t('admin.deletePlayerNotice'))).toBeInTheDocument()

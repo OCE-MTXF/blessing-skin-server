@@ -5,175 +5,212 @@ namespace App\Http\Controllers;
 use App\Models\Player;
 use App\Models\Texture;
 use App\Models\User;
-use Blessing\Minecraft;
-use Carbon\Carbon;
+use App\Services\Textures\InvalidTextureImage;
+use App\Services\Textures\TextureBlobs;
+use App\Services\Textures\TextureImage;
+use App\Services\Textures\TextureImages;
+use App\Services\Textures\TextureReferences;
+use App\Services\Textures\TextureRenderer;
+use App\Services\Textures\TextureRenditions;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
-use Intervention\Image\Facades\Image;
+use Symfony\Component\HttpFoundation\Response;
 
 class TextureController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('cache.headers:public;max_age='.option('cache_expire_time'))
-            ->only(['json']);
-
-        $this->middleware('cache.headers:etag;public;max_age='.option('cache_expire_time'))
-            ->only([
-                'preview',
-                'raw',
-                'texture',
-                'avatarByPlayer',
-                'avatarByUser',
-                'avatarByTexture',
-            ]);
+    public function __construct(
+        private TextureBlobs $blobs,
+        private TextureImages $images,
+        private TextureRenderer $renderer,
+        private TextureRenditions $renditions,
+        private TextureReferences $references,
+    ) {
     }
 
-    public function json($player)
+    public function json(Request $request, string $player)
     {
-        $player = Player::where('name', $player)->firstOrFail();
-        $isBanned = $player->user->permission === User::BANNED;
-        abort_if($isBanned, 403, trans('general.player-banned'));
+        $player = Player::with('user')->where('name', $player)->firstOrFail();
+        abort_if(!$player->user || $player->user->permission === User::BANNED, 403, trans('general.player-banned'));
 
-        return response()->json($player)->setLastModified($player->last_modified);
+        // Validate the *current* profile on every request. An ETag, unlike the
+        // player's timestamp alone, also reflects a revoked/missing asset.
+        return $this->publicResponse($request, response()->json($player->publicProfile($this->references)))
+            ->setLastModified($player->last_modified);
     }
 
-    public function previewByHash(Minecraft $minecraft, Request $request, $hash)
+    public function previewByHash(Request $request, string $hash): Response
     {
-        $texture = Texture::where('hash', $hash)->firstOrFail();
+        [$texture, $source] = $this->publishedByHash($hash);
 
-        return $this->preview($minecraft, $request, $texture);
+        return $this->renderPreview($request, $texture, true, true, $source);
     }
 
-    public function preview(Minecraft $minecraft, Request $request, Texture $texture)
+    public function preview(Request $request, Texture $texture): Response
     {
-        $tid = $texture->tid;
-        $hash = $texture->hash;
-        $usePNG = $request->has('png') || !(imagetypes() & IMG_WEBP);
-        $format = $usePNG ? 'png' : 'webp';
+        $this->authorizeTexture($request, $texture);
 
-        $disk = Storage::disk('textures');
-        abort_if($disk->missing($hash), 404);
+        return $this->renderPreview($request, $texture, $this->references->isPublished($texture), false);
+    }
 
-        $height = (int) $request->query('height', 200);
-        $now = Carbon::now();
-        $response = Cache::remember(
-            'preview-t'.$tid."-$format",
-            option('enable_preview_cache') ? $now->addYear() : $now->addMinute(),
-            function () use ($minecraft, $disk, $texture, $hash, $height, $usePNG) {
-                $file = $disk->get($hash);
-                if ($texture->type === 'cape') {
-                    $image = $minecraft->renderCape($file, $height);
-                } else {
-                    $image = $minecraft->renderSkin($file, 12, $texture->type === 'alex');
-                }
+    private function renderPreview(Request $request, Texture $texture, bool $published, bool $stateless, ?TextureImage $source = null): Response
+    {
+        $source ??= $this->source($texture);
+        abort_unless($source, 404);
+        $height = $texture->type === 'cape' ? $this->size($request, 'height', 200, TextureImages::CAPE_HEIGHTS) : 0;
+        $format = $this->images->outputFormat($request->has('png'));
+        $bytes = $this->render("preview:{$texture->type}:$height:$format", $source,
+            $published && option('enable_preview_cache'),
+            fn () => $this->images->encode($this->renderer->preview($source, $texture->type, $height), $format));
 
-                $lastModified = $disk->lastModified($hash);
+        return $this->imageResponse($request, $bytes, $format, $stateless);
+    }
 
-                // TODO: refactor
-                return \Intervention\Image\ImageManagerStatic::configure(['driver' => 'gd'])->make($image)
-                    ->response($usePNG ? 'png' : 'webp', 100)
-                    ->setLastModified(Carbon::createFromTimestamp($lastModified));
-            }
-        );
+    public function raw(Request $request, int $tid): Response
+    {
+        abort_unless(option('allow_downloading_texture'), 403);
+
+        return $this->asset($request, Texture::findOrFail($tid));
+    }
+
+    public function asset(Request $request, Texture $texture): Response
+    {
+        $this->authorizeTexture($request, $texture);
+        $source = $this->source($texture);
+        abort_unless($source, 404);
+
+        return $this->imageResponse($request, $source->decodeBytes, $source->format, false);
+    }
+
+    public function texture(Request $request, string $hash): Response
+    {
+        [, $source] = $this->publishedByHash($hash);
+
+        return $this->imageResponse($request, $source->decodeBytes, $source->format, true);
+    }
+
+    public function avatarByPlayer(Request $request, string $name): Response
+    {
+        $player = Player::where('name', $name)->firstOrFail();
+        $texture = $this->references->gameTexture($player->user, $player->skin, 'skin');
+
+        return $this->avatar($request, $texture, true, true);
+    }
+
+    public function avatarByUser(Request $request, int $uid): Response
+    {
+        $user = User::find($uid);
+        $texture = $user && $user->avatar ? $this->references->gameTexture($user, Texture::find($user->avatar), 'avatar') : null;
+
+        return $this->avatar($request, $texture, true, true);
+    }
+
+    public function avatarByHash(Request $request, string $hash): Response
+    {
+        [$texture, $source] = $this->publishedByHash($hash, true);
+
+        return $this->avatar($request, $texture, true, true, $source);
+    }
+
+    public function avatarByTexture(Request $request, int $tid): Response
+    {
+        $texture = Texture::find($tid);
+        if ($texture) {
+            $this->authorizeTexture($request, $texture);
+        }
+
+        return $this->avatar($request, $texture, $texture === null || $this->references->isPublished($texture), false);
+    }
+
+    private function avatar(Request $request, ?Texture $texture, bool $published, bool $stateless, ?TextureImage $source = null): Response
+    {
+        abort_if($texture && !$texture->fitsSlot('avatar'), 422);
+        $source ??= $texture ? $this->source($texture) : null;
+        $size = $this->size($request, 'size', 100, TextureImages::AVATAR_SIZES);
+        $mode = $request->has('3d') ? '3d' : '2d';
+        $format = $this->images->outputFormat($request->has('png'));
+        $bytes = $this->render("avatar:$mode:$size:$format", $source,
+            $published && option('enable_avatar_cache'),
+            fn () => $this->images->encode($this->renderer->avatar($source, $size, $mode === '3d'), $format));
+
+        return $this->imageResponse($request, $bytes, $format, $stateless);
+    }
+
+    private function source(Texture $texture): ?TextureImage
+    {
+        $source = $this->blobs->read($texture->hash);
+
+        return $source && $this->images->matches($source, $texture->type) ? $source : null;
+    }
+
+    /** @return array{Texture, TextureImage} */
+    private function publishedByHash(string $hash, bool $skinOnly = false): array
+    {
+        abort_unless(TextureBlobs::validHash($hash), 404);
+        $query = Texture::published()->where('hash', $hash)
+            ->whereIn('type', $skinOnly ? ['steve', 'alex'] : ['steve', 'alex', 'cape']);
+        abort_unless((clone $query)->exists(), 404);
+        $source = $this->blobs->read($hash);
+        abort_unless($source, 404);
+        $types = array_values(array_filter($skinOnly ? ['steve', 'alex'] : ['steve', 'alex', 'cape'],
+            fn (string $type) => $this->images->matches($source, $type)));
+
+        // A surviving compatible public record keeps the digest available,
+        // even when an earlier legacy record is mislabeled or private.
+        return [$query->whereIn('type', $types)->orderBy('tid')->firstOrFail(), $source];
+    }
+
+    private function authorizeTexture(Request $request, Texture $texture): void
+    {
+        abort_unless($this->references->canView($request->user(), $texture), 404);
+    }
+
+    private function render(string $variant, ?TextureImage $source, bool $cache, \Closure $encode): string
+    {
+        try {
+            return $this->renditions->get($variant, $source, $cache, $encode);
+        } catch (InvalidTextureImage) {
+            abort(404);
+        }
+    }
+
+    private function size(Request $request, string $name, int $default, array $allowed): int
+    {
+        $query = $request->query();
+        if (!array_key_exists($name, $query)) {
+            return $default;
+        }
+        $value = $query[$name];
+        abort_unless(is_scalar($value) && ctype_digit((string) $value) && in_array((int) $value, $allowed, true), 422);
+
+        return (int) $value;
+    }
+
+    private function imageResponse(Request $request, string $bytes, string $format, bool $stateless): Response
+    {
+        $response = response($bytes, 200, [
+            'Content-Type' => 'image/'.$format,
+            'Content-Length' => (string) strlen($bytes),
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+        if ($stateless) {
+            return $this->publicResponse($request, $response);
+        }
+
+        // Optional session scope: neither owner-only nor cookie-bearing
+        // representations may be persisted in a shared HTTP cache.
+        $response->headers->set('Cache-Control', 'private, no-store');
 
         return $response;
     }
 
-    public function raw($tid)
+    private function publicResponse(Request $request, Response $response): Response
     {
-        abort_unless(option('allow_downloading_texture'), 403);
-
-        $texture = Texture::findOrFail($tid);
-
-        return $this->texture($texture->hash);
-    }
-
-    public function texture(string $hash)
-    {
-        $disk = Storage::disk('textures');
-        abort_if($disk->missing($hash), 404);
-
-        $lastModified = Carbon::createFromTimestamp($disk->lastModified($hash));
-
-        return response($disk->get($hash))
-            ->withHeaders([
-                'Content-Type' => 'image/png',
-                'Content-Length' => $disk->size($hash),
-            ])
-            ->setLastModified($lastModified);
-    }
-
-    public function avatarByPlayer(Minecraft $minecraft, Request $request, $name)
-    {
-        $player = Player::where('name', $name)->firstOrFail();
-
-        return $this->avatar($minecraft, $request, $player->skin);
-    }
-
-    public function avatarByUser(Minecraft $minecraft, Request $request, $uid)
-    {
-        $texture = Texture::find(optional(User::find($uid))->avatar);
-
-        return $this->avatar($minecraft, $request, $texture);
-    }
-
-    public function avatarByHash(Minecraft $minecraft, Request $request, $hash)
-    {
-        $texture = Texture::where('hash', $hash)->first();
-
-        return $this->avatar($minecraft, $request, $texture);
-    }
-
-    public function avatarByTexture(Minecraft $minecraft, Request $request, $tid)
-    {
-        $texture = Texture::find($tid);
-
-        return $this->avatar($minecraft, $request, $texture);
-    }
-
-    protected function avatar(Minecraft $minecraft, Request $request, ?Texture $texture)
-    {
-        if (!empty($texture) && $texture->type !== 'steve' && $texture->type !== 'alex') {
-            return abort(422);
+        $response->headers->set('Cache-Control', 'public, no-cache, max-age=0, must-revalidate');
+        $response->setEtag(hash('sha256', $response->getContent()));
+        // Never honor date-only validators when authorization or references
+        // can change without updating the source file's timestamp.
+        if ($request->headers->has('If-None-Match')) {
+            $response->isNotModified($request);
         }
-
-        $size = (int) $request->query('size', 100);
-        $mode = $request->has('3d') ? '3d' : '2d';
-        $usePNG = $request->has('png') || !(imagetypes() & IMG_WEBP);
-        $format = $usePNG ? 'png' : 'webp';
-
-        $disk = Storage::disk('textures');
-        if (is_null($texture) || $disk->missing($texture->hash)) {
-            // TODO: refactor
-            return \Intervention\Image\ImageManagerStatic::configure(['driver' => 'gd'])->make(resource_path("misc/textures/avatar$mode.png"))
-                ->resize($size, $size)
-                ->response($usePNG ? 'png' : 'webp', 100);
-        }
-
-        $hash = $texture->hash;
-        $now = Carbon::now();
-        $response = Cache::remember(
-            'avatar-'.$mode.'-t'.$texture->tid.'-s'.$size."-$format",
-            option('enable_avatar_cache') ? $now->addYear() : $now->addMinute(),
-            function () use ($minecraft, $disk, $hash, $size, $mode, $usePNG) {
-                $file = $disk->get($hash);
-                if ($mode === '3d') {
-                    $image = $minecraft->render3dAvatar($file, 25);
-                } else {
-                    $image = $minecraft->render2dAvatar($file, 25);
-                }
-
-                $lastModified = Carbon::createFromTimestamp($disk->lastModified($hash));
-
-                // TODO: refactor
-                return \Intervention\Image\ImageManagerStatic::configure(['driver' => 'gd'])->make($image)
-                    ->resize($size, $size)
-                    ->response($usePNG ? 'png' : 'webp', 100)
-                    ->setLastModified($lastModified);
-            }
-        );
 
         return $response;
     }

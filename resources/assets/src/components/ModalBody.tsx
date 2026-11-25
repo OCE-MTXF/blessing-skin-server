@@ -18,9 +18,7 @@ const ModalBody: React.FC<InternalProps & InputInteralProps & Props> = (
 ) => {
   return (
     <div className="modal-body">
-      <ModalContent text={props.text} dangerousHTML={props.dangerousHTML}>
-        {props.children}
-      </ModalContent>
+      <ModalContent text={props.text}>{props.children}</ModalContent>
       {props.showInput && <ModalInput {...props} />}
     </div>
   )

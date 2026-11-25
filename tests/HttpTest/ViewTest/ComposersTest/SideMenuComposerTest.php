@@ -4,10 +4,10 @@ namespace Tests;
 
 use App\Events;
 use App\Models\User;
-use App\Services\Plugin;
 use App\Services\PluginManager;
 use Illuminate\Support\Facades\Event;
 use Symfony\Component\DomCrawler\Crawler;
+use Tests\Support\PluginFixture;
 
 class SideMenuComposerTest extends TestCase
 {
@@ -55,34 +55,24 @@ class SideMenuComposerTest extends TestCase
         $this->assertCount(2, $crawler->filter('aside .nav-link.active'));
     }
 
-    public function testCollectPluginConfigs()
+    public function testPluginConfigMenuRequiresApprovalActivationAndSuperAdmin(): void
     {
-        $this->mock(PluginManager::class, function ($mock) {
-            $mock->shouldReceive('getEnabledPlugins')
-                ->with()
-                ->twice()
-                ->andReturn(
-                    collect(),
-                    collect([
-                        new Plugin(resource_path(''), [
-                            'config' => 'user/master.blade.php',
-                            'title' => 'Fake',
-                            'name' => 'fake',
-                        ]),
-                    ])
-                );
-        });
+        $fixture = new PluginFixture($this->beforeApplicationDestroyed(...));
+        $record = $fixture->package('demo');
+        $fixture->approve($record);
+        $manager = $fixture->manager();
+        $this->app->instance(PluginManager::class, $manager);
 
-        $admin = User::factory()->admin()->create();
-        $this->actingAs($admin)
-            ->get('/admin')
-            ->assertDontSee(trans('general.plugin-configs'));
+        $superAdmin = User::factory()->superAdmin()->create()->refresh();
+        $this->actingAs($superAdmin)->get('/admin/options')->assertOk()
+            ->assertDontSee('admin/plugins/config/demo')->assertSee('admin/i18n');
 
-        $this->actingAs($admin)
-            ->get('/admin')
+        $fixture->select($record);
+        $manager->boot();
+        $this->actingAs(User::factory()->admin()->create()->refresh())->get('/admin/options')->assertOk()
+            ->assertDontSee('admin/plugins/config/demo')->assertDontSee('admin/i18n');
+        $this->actingAs($superAdmin)->get('/admin/options')->assertOk()
             ->assertSee(trans('general.plugin-configs'))
-            ->assertSee('fa-circle')
-            ->assertSee('Fake')
-            ->assertSee('admin/plugins/config/fake');
+            ->assertSee('Demo demo')->assertSee('admin/plugins/config/demo');
     }
 }

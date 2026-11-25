@@ -2,64 +2,65 @@
 
 namespace App\Exceptions;
 
-use Illuminate\Database\Eloquent\ModelNotFoundException;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
+use Illuminate\Http\Response;
 use Laravel\Passport\Exceptions\MissingScopeException;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class Handler extends ExceptionHandler
 {
-    /**
-     * A list of the exception types that should not be reported.
-     */
-    protected $dontReport = [
-        \Illuminate\Auth\AuthenticationException::class,
-        \Illuminate\Auth\Access\AuthorizationException::class,
-        \Symfony\Component\HttpKernel\Exception\HttpException::class,
-        \Illuminate\Validation\ValidationException::class,
-        \Illuminate\Session\TokenMismatchException::class,
-        ModelNotFoundException::class,
-        PrettyPageException::class,
+    protected $dontFlash = [
+        'current_password', 'password', 'password_confirmation', 'new_password', 'confirmation',
+        'token', 'code', 'client_secret', 'refresh_token', 'auth_token', 'code_verifier', 'captcha',
     ];
 
-    public function render($request, Throwable $exception)
+    protected $dontReport = [PrettyPageException::class];
+
+    public function register(): void
     {
-        if ($exception instanceof ModelNotFoundException) {
-            $model = $exception->getModel();
-            if (Str::endsWith($model, 'Texture')) {
-                $exception = new ModelNotFoundException(trans('skinlib.non-existent'));
-            }
-        } elseif ($exception instanceof MissingScopeException) {
-            return json($exception->getMessage(), 403);
+        $this->renderable(function (MissingScopeException $exception, $request) {
+            return response()->json(['message' => 'Insufficient scope.'], 403);
+        });
+    }
+
+    protected function shouldReturnJson($request, Throwable $e)
+    {
+        return $request->is('api', 'api/*', 'oauth/token') || parent::shouldReturnJson($request, $e);
+    }
+
+    protected function finalizeRenderedResponse($request, $response, Throwable $e)
+    {
+        $response = parent::finalizeRenderedResponse($request, $response, $e);
+        $response->headers->set('Cache-Control', 'no-store');
+
+        return (new SecurityHeaders)->apply($request, $response);
+    }
+
+    protected function prepareResponse($request, Throwable $e)
+    {
+        $status = $this->isHttpException($e) ? $e->getStatusCode() : 500;
+        if ($status >= 500) {
+            // Do not depend on the database, locale loader, or assets when rendering a failure.
+            $headers = $e instanceof HttpExceptionInterface ? $e->getHeaders() : [];
+
+            return new Response(HttpResponse::$statusTexts[$status] ?? 'Server Error', $status, $headers + ['Content-Type' => 'text/plain; charset=UTF-8']);
         }
 
-        return parent::render($request, $exception);
+        return parent::prepareResponse($request, $e);
     }
 
     protected function convertExceptionToArray(Throwable $e)
     {
-        return [
-            'message' => $e->getMessage(),
-            'exception' => true,
-            'trace' => collect($e->getTrace())
-                ->map(fn ($trace) => Arr::only($trace, ['file', 'line']))
-                ->filter(fn ($trace) => Arr::has($trace, 'file'))
-                ->map(function ($trace) {
-                    $trace['file'] = str_replace(base_path().DIRECTORY_SEPARATOR, '', $trace['file']);
+        if (!$this->isHttpException($e) || $e->getStatusCode() >= 500) {
+            return ['message' => 'Server Error'];
+        }
 
-                    return $trace;
-                })
-                ->filter(function ($trace) {
-                    // @codeCoverageIgnoreStart
-                    $isFromPlugins = !app()->runningUnitTests()
-                        && Str::contains($trace['file'], resolve('plugins')->getPluginsDirs()->all());
+        // Expose only the standardized status phrase, never arbitrary exception detail.
+        assert($e instanceof HttpExceptionInterface);
 
-                    // @codeCoverageIgnoreEnd
-                    return Str::startsWith($trace['file'], 'app') || $isFromPlugins;
-                })
-                ->values(),
-        ];
+        return ['message' => \Symfony\Component\HttpFoundation\Response::$statusTexts[$e->getStatusCode()] ?? 'Request failed'];
     }
 }

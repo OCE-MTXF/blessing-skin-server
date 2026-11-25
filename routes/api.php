@@ -2,18 +2,16 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::any('', 'HomeController@apiRoot');
+Route::get('', 'HomeController@apiRoot');
 
-Route::prefix('user')->middleware('auth:oauth')->group(function () {
-    Route::get('', 'UserController@user')->middleware(['scope:User.Read']);
-
-    Route::middleware(['scope:Notification.Read'])->group(function () {
-        Route::get('notifications', 'NotificationsController@all');
-        Route::post('notifications/{id}', 'NotificationsController@read');
-    });
+Route::prefix('user')->middleware('oauth-api')->group(function () {
+    Route::get('', 'UserController@user')->middleware('scope:User.Read');
+    Route::get('notifications', 'NotificationsController@all')->middleware('scope:Notification.Read');
+    Route::get('notifications/{id}', 'NotificationsController@show')->whereUuid('id')->middleware('scope:Notification.Read');
+    Route::post('notifications/{id}', 'NotificationsController@read')->whereUuid('id')->middleware('scope:Notification.Acknowledge');
 });
 
-Route::prefix('players')->middleware('auth:oauth')->group(function () {
+Route::prefix('players')->middleware('oauth-api')->group(function () {
     Route::get('', 'PlayerController@list')->middleware(['scope:Player.Read,Player.ReadWrite']);
 
     Route::middleware(['scope:Player.ReadWrite'])->group(function () {
@@ -25,7 +23,7 @@ Route::prefix('players')->middleware('auth:oauth')->group(function () {
     });
 });
 
-Route::prefix('closet')->middleware('auth:oauth')->group(function () {
+Route::prefix('closet')->middleware('oauth-api')->group(function () {
     Route::get('', 'ClosetController@getClosetData')->middleware(['scope:Closet.Read,Closet.ReadWrite']);
 
     Route::middleware(['scope:Closet.ReadWrite'])->group(function () {
@@ -36,7 +34,7 @@ Route::prefix('closet')->middleware('auth:oauth')->group(function () {
 });
 
 Route::prefix('admin')
-    ->middleware(['auth:oauth', 'role:admin'])
+    ->middleware(['oauth-api', 'role:admin'])
     ->group(function () {
         Route::prefix('users')->group(function () {
             Route::get('', 'UsersManagementController@list')->name('list')->middleware(['scope:UsersManagement.Read,UsersManagement.ReadWrite']);
@@ -75,5 +73,5 @@ Route::prefix('admin')
             Route::put('{report}', 'ReportController@review')->middleware(['scope:ReportsManagement.ReadWrite']);
         });
 
-        Route::post('notifications', 'NotificationsController@send')->middleware(['scope:Notification.ReadWrite']);
+        Route::post('notifications', 'NotificationsController@send')->middleware(['scope:Notification.ReadWrite', 'throttle:broadcast']);
     });

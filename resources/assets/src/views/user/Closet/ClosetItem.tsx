@@ -21,7 +21,7 @@ const ClosetItem: React.FC<Props> = (props) => {
     props.onClick(item)
   }
 
-  const handleSetAsAvatar = () => setAsAvatar(item.tid)
+  const handleSetAsAvatar = () => setAsAvatar(item)
 
   return (
     <Card className={`card mr-3 mb-3 ${props.selected ? 'shadow' : ''}`}>
@@ -62,9 +62,19 @@ const ClosetItem: React.FC<Props> = (props) => {
               >
                 {t('user.viewInSkinlib')}
               </a>
-              <a href="#" className="dropdown-item" onClick={handleSetAsAvatar}>
-                {t('user.setAsAvatar')}
-              </a>
+              {item.public ? (
+                <a
+                  href="#"
+                  className="dropdown-item"
+                  onClick={handleSetAsAvatar}
+                >
+                  {t('user.setAsAvatar')}
+                </a>
+              ) : (
+                <span className="dropdown-item-text small text-muted">
+                  {t('skinlib.publishToUse')}
+                </span>
+              )}
             </div>
           </span>
         </div>

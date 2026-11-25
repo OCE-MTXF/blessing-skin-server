@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\SearchString;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
-use Lorisleiva\LaravelSearchString\Concerns\SearchString;
 
 /**
  * @property int     $id

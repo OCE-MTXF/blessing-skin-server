@@ -35,5 +35,5 @@ test('input file', () => {
   const { getByLabelText } = render(<FileInput file={null} onChange={mock} />)
   fireEvent.change(getByLabelText(t('skinlib.upload.select-file')))
 
-  expect(mock).toBeCalled()
+  expect(mock).toHaveBeenCalled()
 })

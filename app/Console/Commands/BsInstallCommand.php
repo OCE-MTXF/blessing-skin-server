@@ -2,51 +2,60 @@
 
 namespace App\Console\Commands;
 
-use App\Models\User;
-use Carbon\Carbon;
+use App\Services\Installation\Lifecycle;
+use App\Services\Installation\LifecycleException;
 use Illuminate\Console\Command;
-use Illuminate\Filesystem\Filesystem;
+use Throwable;
 
-class BsInstallCommand extends Command
+final class BsInstallCommand extends Command
 {
-    protected $signature = 'bs:install {email} {password} {nickname}';
+    protected $signature = 'bs:install {email} {nickname} {--password-stdin : Read one password line from standard input}';
 
-    protected $description = 'Execute installation and create a super administrator.';
+    protected $description = 'Initialize an empty instance and create its first administrator offline';
 
-    public function handle(Filesystem $filesystem)
+    public function handle(Lifecycle $lifecycle): int
     {
-        if ($filesystem->exists(storage_path('install.lock'))) {
-            $this->info('You have installed Blessing Skin Server. Nothing to do.');
+        try {
+            $password = $this->readPassword();
+            $lifecycle->install($this->argument('email'), $this->argument('nickname'), $password);
+        } catch (LifecycleException $failure) {
+            $this->error($failure->getMessage());
 
-            return;
+            return self::FAILURE;
+        } catch (Throwable) {
+            // SQL and exception diagnostics can include sensitive values even with APP_DEBUG=false.
+            $this->error('Installation failed. Check the offline deployment prerequisites and restore a consistent backup if necessary.');
+
+            return self::FAILURE;
+        } finally {
+            unset($password);
         }
 
-        $this->call('migrate', ['--force' => true]);
-        if (!$this->getLaravel()->runningUnitTests()) {
-            // @codeCoverageIgnoreStart
-            $this->call('key:generate');
-            $this->call('passport:keys', ['--no-interaction' => true]);
-            // @codeCoverageIgnoreEnd
+        $this->info('Installation completed. Verify readiness before enabling traffic.');
+
+        return self::SUCCESS;
+    }
+
+    private function readPassword(): string
+    {
+        if ($this->option('password-stdin')) {
+            $line = fgets(STDIN, 4099);
+            if ($line === false || strlen($line) > 4097) {
+                throw new LifecycleException('Read one password line (8–1024 characters) from protected standard input.');
+            }
+
+            return rtrim($line, "\r\n");
+        }
+        if (!$this->input->isInteractive()) {
+            throw new LifecycleException('Use --password-stdin for a non-interactive installation.');
+        }
+        // Disallow falling back to a visible prompt if the terminal cannot conceal input.
+        $password = $this->secret('Administrator password', false);
+        $confirmation = $this->secret('Confirm administrator password', false);
+        if (!is_string($password) || !is_string($confirmation) || !hash_equals($password, $confirmation)) {
+            throw new LifecycleException('Administrator password confirmation did not match.');
         }
 
-        option(['site_url' => url('/')]);
-
-        $admin = new User();
-        $admin->email = $this->argument('email');
-        $admin->nickname = $this->argument('nickname');
-        $admin->score = option('user_initial_score');
-        $admin->avatar = 0;
-        $admin->password = app('cipher')->hash($this->argument('password'), config('secure.salt'));
-        $admin->ip = '127.0.0.1';
-        $admin->permission = User::SUPER_ADMIN;
-        $admin->register_at = Carbon::now();
-        $admin->last_sign_at = Carbon::now()->subDay();
-        $admin->verified = true;
-        $admin->save();
-
-        $filesystem->put(storage_path('install.lock'), '');
-
-        $this->info('Installation completed!');
-        $this->info('We recommend to modify your "Site URL" option if incorrect.');
+        return $password;
     }
 }

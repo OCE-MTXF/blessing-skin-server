@@ -23,6 +23,7 @@ storage/oauth-private.key
 storage/install.lock
 storage/options.php
 .phpunit.result.cache
+.phpunit.cache/
 .php-cs-fixer.cache
 resources/views/overrides
 .DS_Store

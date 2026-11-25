@@ -2,44 +2,35 @@
 
 namespace Tests;
 
+use App\Events\RenderingFooter;
 use App\Models\User;
 use App\Services\Translations\JavaScript;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Event;
 use Symfony\Component\DomCrawler\Crawler;
 
 class FootComposerTest extends TestCase
 {
-    use DatabaseTransactions;
-
-    public function testInjectJavaScript()
+    public function testSerializesTranslationsAsInertDataAndIgnoresLegacyScript(): void
     {
-        $this->mock(JavaScript::class, function ($mock) {
-            $mock->shouldReceive('generate')
-                ->with('en')
-                ->atLeast(1)
-                ->andReturn('en.js');
+        $messages = ['label' => 'Use <b>plain text</b> & "quotes"'];
+        $this->mock(JavaScript::class, function ($mock) use ($messages) {
+            $mock->shouldReceive('generate')->with('en')->andReturn($messages);
         });
-        option([
-            'custom_js' => '"<div></div>"</script><h1 id=disallowed></h1><script>',
-        ]);
-        $user = User::factory()->create();
-        $this->actingAs($user);
-        $this->get('/user')
-            ->assertSee('"<div></div>"', false)
-            ->assertSee('en.js');
-        $crawler = new Crawler($this->get('/user')->getContent());
-        $this->assertCount(0, $crawler->filter('#disallowed'));
+        option(['custom_js' => 'unused legacy footer marker']);
+        $crawler = new Crawler($this->get('/')->assertOk()->assertDontSee('unused legacy footer marker')->getContent());
+        $data = $crawler->filter('script#blessing-i18n[type="application/json"]');
+        $this->assertCount(1, $data);
+        $this->assertStringNotContainsString('<b>', $data->text());
+        $this->assertSame($messages, json_decode($data->text(), true, flags: JSON_THROW_ON_ERROR));
     }
 
-    public function testAddExtra()
+    public function testRetainsTrustedExtensionHook(): void
     {
-        Event::listen(\App\Events\RenderingFooter::class, function ($event) {
-            $event->contents[] = '<div id=appended></div>';
+        Event::listen(RenderingFooter::class, function (RenderingFooter $event) {
+            $event->addContent('<div id="appended"></div>');
         });
 
-        $user = User::factory()->create();
-        $this->actingAs($user);
-        $this->get('/user')->assertSee('<div id=appended></div>', false);
+        $this->actingAs(User::factory()->create()->refresh())
+            ->get('/user')->assertOk()->assertSee('<div id="appended"></div>', false);
     }
 }

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { hot } from 'react-hot-loader/root'
 import useBlessingExtra from '@/scripts/hooks/useBlessingExtra'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
 import useTexture from '@/scripts/hooks/useTexture'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
 import { showModal, toast } from '@/scripts/notify'
+import textureAssetUrl from '@/scripts/textureAssetUrl'
 import { Player, TextureType } from '@/scripts/types'
 import urls from '@/scripts/urls'
 import Row from './Row'
@@ -18,8 +18,9 @@ const Players: React.FC = () => {
   const [players, setPlayers] = useState<Player[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selected, setSelected] = useState(0)
-  const [skin, setSkin] = useTexture()
-  const [cape, setCape] = useTexture()
+  const selectedPlayer = players.find((player) => player.pid === selected)
+  const skin = useTexture(selectedPlayer?.tid_skin)
+  const cape = textureAssetUrl(selectedPlayer?.tid_cape)
   const [search, setSearch] = useState('')
   const [showModalAddPlayer, setShowModalAddPlayer] = useState(false)
   const [showModalReset, setShowModalReset] = useState(false)
@@ -27,19 +28,13 @@ const Players: React.FC = () => {
 
   useEmitMounted()
 
-  const selectPlayer = (player: Player) => {
-    setSelected(player.pid)
-    setSkin(player.tid_skin)
-    setCape(player.tid_cape)
-  }
-
   useEffect(() => {
     const getPlayers = async () => {
       setIsLoading(true)
       const players = await fetch.get<Player[]>('/user/player/list')
       setPlayers(players)
       if (players.length === 1) {
-        selectPlayer(players[0]!)
+        setSelected(players[0]!.pid)
       }
       setIsLoading(false)
     }
@@ -106,12 +101,6 @@ const Players: React.FC = () => {
     )
     if (code === 0) {
       toast.success(message)
-      if (skin) {
-        setSkin(0)
-      }
-      if (cape) {
-        setCape(0)
-      }
       setPlayers((players) => {
         const index = players.findIndex((player) => player.pid === selected)
         const player = Object.assign({}, players[index])
@@ -197,7 +186,7 @@ const Players: React.FC = () => {
                       key={player.pid}
                       player={player}
                       selected={selected === player.pid}
-                      onClick={() => selectPlayer(player)}
+                      onClick={() => setSelected(player.pid)}
                       onEditName={() => editName(player, i)}
                       onReset={openModalReset}
                       onDelete={deletePlayer}
@@ -216,7 +205,7 @@ const Players: React.FC = () => {
       </div>
       <Previewer
         skin={skin.url}
-        cape={cape.url}
+        cape={cape}
         isAlex={skin.type === TextureType.Alex}
       />
       <ModalAddPlayer
@@ -233,4 +222,4 @@ const Players: React.FC = () => {
   )
 }
 
-export default hot(Players)
+export default Players

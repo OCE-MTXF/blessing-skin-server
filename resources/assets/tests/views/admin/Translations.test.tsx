@@ -22,7 +22,7 @@ test('empty text', async () => {
   fetch.get.mockResolvedValue(createPaginator([line]))
 
   const { queryByText } = render(<Translations />)
-  await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+  await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
   expect(queryByText(t('admin.i18n.empty'))).toBeInTheDocument()
 })
 
@@ -37,7 +37,7 @@ describe('edit line', () => {
     const { getByText, getByDisplayValue, getByRole, queryByText } = render(
       <Translations />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('admin.i18n.modify')))
     fireEvent.input(getByDisplayValue(fixtureLine.text.en!), {
@@ -45,7 +45,7 @@ describe('edit line', () => {
     })
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(`/admin/i18n/${fixtureLine.id}`, {
+      expect(fetch.put).toHaveBeenCalledWith(`/admin/i18n/${fixtureLine.id}`, {
         text: 'finish',
       }),
     )
@@ -60,7 +60,7 @@ describe('edit line', () => {
     const { getByText, getByDisplayValue, getByRole, queryByText } = render(
       <Translations />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('admin.i18n.modify')))
     fireEvent.input(getByDisplayValue(fixtureLine.text.en!), {
@@ -68,7 +68,7 @@ describe('edit line', () => {
     })
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(`/admin/i18n/${fixtureLine.id}`, {
+      expect(fetch.put).toHaveBeenCalledWith(`/admin/i18n/${fixtureLine.id}`, {
         text: 'finish',
       }),
     )
@@ -81,14 +81,14 @@ describe('edit line', () => {
     const { getByText, getByDisplayValue, queryByText } = render(
       <Translations />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('admin.i18n.modify')))
     fireEvent.input(getByDisplayValue(fixtureLine.text.en!), {
       target: { value: 'finish' },
     })
     fireEvent.click(getByText(t('general.cancel')))
-    await waitFor(() => expect(fetch.put).not.toBeCalled())
+    await waitFor(() => expect(fetch.put).not.toHaveBeenCalled())
     expect(queryByText(fixtureLine.text.en!)).toBeInTheDocument()
   })
 })
@@ -102,12 +102,12 @@ describe('delete line', () => {
     fetch.del.mockResolvedValue({ code: 0, message: 'ok' })
 
     const { getByText, getByRole, queryByText } = render(<Translations />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('admin.i18n.delete')))
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(`/admin/i18n/${fixtureLine.id}`),
+      expect(fetch.del).toHaveBeenCalledWith(`/admin/i18n/${fixtureLine.id}`),
     )
     expect(queryByText(fixtureLine.text.en!)).not.toBeInTheDocument()
     expect(queryByText('ok')).toBeInTheDocument()
@@ -116,11 +116,11 @@ describe('delete line', () => {
 
   it('cancelled', async () => {
     const { getByText, queryByText } = render(<Translations />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('admin.i18n.delete')))
     fireEvent.click(getByText(t('general.cancel')))
-    await waitFor(() => expect(fetch.del).not.toBeCalled())
+    await waitFor(() => expect(fetch.del).not.toHaveBeenCalled())
     expect(queryByText(fixtureLine.text.en!)).toBeInTheDocument()
   })
 })

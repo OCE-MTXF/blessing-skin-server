@@ -2,32 +2,27 @@
 
 namespace App\Listeners;
 
+use App\Http\Middleware\DetectLanguagePrefer;
 use App\Models\User;
+use Illuminate\Auth\Events\Authenticated;
 use Illuminate\Http\Request;
 
-class SetAppLocale
+final class SetAppLocale
 {
-    protected Request $request;
-
-    public function __construct(Request $request)
+    public function __construct(private Request $request)
     {
-        $this->request = $request;
     }
 
-    public function handle($event)
+    public function handle(Authenticated $event): void
     {
-        /** @var User */
-        $user = $event->user;
-
-        if ($this->request->has('lang')) {
-            $user->locale = $this->request->input('lang');
-            $user->save();
-
+        if ($event->guard !== 'web' || !$event->user instanceof User
+            || DetectLanguagePrefer::normalize($this->request->query->all()['lang'] ?? null) !== null
+            || DetectLanguagePrefer::normalize($this->request->cookie('locale')) !== null) {
             return;
         }
 
-        $locale = $user->locale;
-        if ($locale) {
+        $locale = DetectLanguagePrefer::normalize($event->user->locale);
+        if ($locale !== null) {
             app()->setLocale($locale);
         }
     }

@@ -40,11 +40,6 @@ return [
             'provider' => 'users',
         ],
 
-        'jwt' => [
-            'driver' => 'jwt',
-            'provider' => 'users',
-        ],
-
         'oauth' => [
             'driver' => 'passport',
             'provider' => 'users',

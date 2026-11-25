@@ -76,18 +76,14 @@ const Row: React.FC<Props> = (props) => {
       <td>
         {verificationStatusText(user.verified)}
         {canModify && (
-          <a
-            className="ml-1"
-            href="#"
-            title={t('admin.toggleVerification')}
+          <button
+            type="button"
+            className="btn btn-link ml-1 p-0"
+            title={t(user.verified ? 'admin.revokeVerification' : 'admin.sendVerification')}
             onClick={props.onVerificationToggle}
           >
-            {user.verified ? (
-              <i className="fas fa-toggle-on"></i>
-            ) : (
-              <i className="fas fa-toggle-off"></i>
-            )}
-          </a>
+            <i className={user.verified ? 'fas fa-toggle-on' : 'fas fa-envelope'} aria-hidden="true" />
+          </button>
         )}
       </td>
       <td>{user.register_at}</td>

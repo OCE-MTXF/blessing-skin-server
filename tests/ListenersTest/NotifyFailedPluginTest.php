@@ -2,29 +2,31 @@
 
 namespace Tests;
 
-use App\Events;
+use App\Events\PluginBootFailed;
+use App\Events\RenderingFooter;
 use App\Models\User;
 use App\Services\Plugin;
 
 class NotifyFailedPluginTest extends TestCase
 {
-    public function testHandle()
+    public function testPluginErrorUsesEscapedAdminOnlyNotice(): void
     {
-        $content = [];
-        $plugin = new Plugin('', ['title' => 'ff']);
+        $plugin = new Plugin('', ['title' => 'Example <b>&</b>']);
+        event(new PluginBootFailed($plugin));
 
-        event(new Events\PluginBootFailed($plugin));
-        event(new Events\RenderingFooter($content));
-        $this->assertCount(0, $content);
+        $content = [];
+        event(new RenderingFooter($content));
+        $this->assertSame([], $content);
 
         $this->actingAs(User::factory()->make());
-        event(new Events\PluginBootFailed($plugin));
-        event(new Events\RenderingFooter($content));
-        $this->assertCount(0, $content);
+        event(new RenderingFooter($content));
+        $this->assertSame([], $content);
 
         $this->actingAs(User::factory()->admin()->make());
-        event(new Events\PluginBootFailed($plugin));
-        event(new Events\RenderingFooter($content));
-        $this->assertStringContainsString('blessing.notify.toast', $content[0]);
+        event(new RenderingFooter($content));
+        $this->assertCount(1, $content);
+        $this->assertStringContainsString('role="alert"', $content[0]);
+        $this->assertStringContainsString('Example &lt;b&gt;&amp;&lt;/b&gt;', $content[0]);
+        $this->assertStringNotContainsString('<script', $content[0]);
     }
 }

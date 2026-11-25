@@ -104,8 +104,8 @@ const Card: React.FC<Props> = (props) => {
                     className="dropdown-item"
                     onClick={props.onVerificationToggle}
                   >
-                    <i className="fas fa-user-check mr-2"></i>
-                    {t('admin.toggleVerification')}
+                    <i className={user.verified ? 'fas fa-toggle-on mr-2' : 'fas fa-envelope mr-2'} aria-hidden="true" />
+                    {t(user.verified ? 'admin.revokeVerification' : 'admin.sendVerification')}
                   </a>
                   <div className="dropdown-divider"></div>
                   {canModify && user.uid !== currentUser.uid && (

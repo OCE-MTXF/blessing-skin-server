@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom'
 import { showModal } from './modal'
 import { Toast } from './toast'
 
@@ -6,7 +7,7 @@ export const toast = new Toast()
 /* istanbul ignore next */
 if (process.env.NODE_ENV === 'test') {
   afterEach(() => {
-    toast.clear()
+    flushSync(() => toast.clear())
   })
 }
 

@@ -1,35 +1,25 @@
-import * as path from 'path'
-import * as webpack from 'webpack'
-import { execSync } from 'child_process'
+import * as path from 'node:path'
+import type { Configuration } from 'webpack'
 import MiniCssExtractPlugin from 'mini-css-extract-plugin'
 import CssMinimizerPlugin from 'css-minimizer-webpack-plugin'
-import HtmlWebpackPlugin from 'html-webpack-plugin'
-import HtmlWebpackEnhancementPlugin from './tools/HtmlWebpackEnhancementPlugin'
+import HtmlWebpackEnhancementPlugin from './tools/HtmlWebpackEnhancementPlugin.ts'
 
-interface Env {
-  production?: boolean
-}
+const root = import.meta.dirname
 
-export default function (env?: Env): webpack.Configuration {
-  const isDev = !env?.production
-  const isGitpod = 'GITPOD_REPO_ROOT' in process.env
-  const htmlPublicPath = isDev
-    ? isGitpod
-      ? `${execSync('gp url 8080')}/app/`
-      : '//localhost:8080/app/'
-    : '{{ cdn_base }}/app/'
+export default function (_env: unknown, argv: { mode?: string }): Configuration {
+  const isDev = argv.mode === 'development'
 
   return {
     name: 'app',
     mode: isDev ? 'development' : 'production',
     entry: {
-      app: ['react-hot-loader/patch', '@/index.tsx'],
+      app: '@/index.tsx',
       style: [
         '@/styles/common.css',
-        'admin-lte/dist/css/alt/adminlte.components.min.css',
-        'admin-lte/dist/css/alt/adminlte.core.min.css',
-        'admin-lte/dist/css/alt/adminlte.pages.min.css',
-        'admin-lte/dist/css/alt/adminlte.light.min.css',
+        '@/styles/vendor/adminlte/adminlte.components.min.css',
+        '@/styles/vendor/adminlte/adminlte.core.min.css',
+        '@/styles/vendor/adminlte/adminlte.pages.min.css',
+        '@/styles/vendor/adminlte/adminlte.light.min.css',
         '@fortawesome/fontawesome-free/css/all.min.css',
       ],
       home: '@/scripts/homePage.ts',
@@ -41,121 +31,53 @@ export default function (env?: Env): webpack.Configuration {
       ],
     },
     output: {
-      path: `${__dirname}/public/app`,
-      publicPath: '/app/',
-      filename: isDev ? '[name].js' : '[name].[contenthash:7].js',
-      chunkFilename: isDev ? '[id].js' : '[id].[contenthash:7].js',
-      crossOriginLoading: 'anonymous',
+      path: path.resolve(root, 'public/app'),
+      publicPath: 'auto',
+      // GlobalThis is available in the current browser target; do not emit a
+      // Function constructor fallback requiring unsafe-eval under CSP.
+      environment: { globalThis: true },
+      clean: true,
+      filename: isDev ? '[name].js' : '[name].[contenthash:12].js',
+      chunkFilename: isDev ? '[id].js' : '[id].[contenthash:12].js',
+      assetModuleFilename: '[contenthash:12][ext]',
     },
     module: {
       rules: [
         {
           test: /\.tsx?$/,
           loader: 'ts-loader',
-          options: {
-            configFile: isDev ? 'tsconfig.dev.json' : 'tsconfig.build.json',
-            transpileOnly: true,
-          },
+          options: { configFile: 'tsconfig.build.json', transpileOnly: true },
         },
         {
           test: /\.css$/,
           use: [
-            isDev ? 'style-loader' : MiniCssExtractPlugin.loader,
-            {
-              loader: 'css-loader',
-              options: {
-                importLoaders: 1,
-              },
-            },
+            { loader: MiniCssExtractPlugin.loader, options: { publicPath: '' } },
+            { loader: 'css-loader', options: { importLoaders: 1 } },
             'postcss-loader',
           ],
         },
         {
           test: /\.(png|webp|svg|woff2?|eot|ttf)$/,
-          type: 'asset',
+          type: 'asset/resource',
         },
       ],
     },
     plugins: [
       new MiniCssExtractPlugin({
-        filename: isDev ? '[name].css' : '[name].[contenthash:7].css',
-        chunkFilename: isDev ? '[id].css' : '[id].[contenthash:7].css',
+        filename: isDev ? '[name].css' : '[name].[contenthash:12].css',
+        chunkFilename: isDev ? '[id].css' : '[id].[contenthash:12].css',
       }),
-      new HtmlWebpackPlugin({
-        templateContent: '',
-        chunks: ['app'],
-        scriptLoading: 'blocking',
-        filename: 'app.twig',
-        publicPath: htmlPublicPath,
-      }),
-      new HtmlWebpackPlugin({
-        templateContent: '',
-        chunks: ['style'],
-        filename: 'style.twig',
-        publicPath: htmlPublicPath,
-      }),
-      new HtmlWebpackPlugin({
-        templateContent: '',
-        chunks: ['home'],
-        scriptLoading: 'blocking',
-        filename: 'home.twig',
-        publicPath: htmlPublicPath,
-      }),
-      new HtmlWebpackPlugin({
-        templateContent: '',
-        chunks: ['home-css'],
-        filename: 'home-css.twig',
-        publicPath: htmlPublicPath,
-      }),
-      new HtmlWebpackPlugin({
-        templateContent: '',
-        chunks: ['spectre'],
-        filename: 'spectre.twig',
-        publicPath: htmlPublicPath,
-      }),
-      new HtmlWebpackEnhancementPlugin(),
-      new webpack.DefinePlugin({
-        'window.Deno': 'true',
-        Deno: {
-          args: [],
-          build: {},
-          version: {},
-        },
-        'process.platform': '"browser"',
-        __blessing_public_path__: JSON.stringify(htmlPublicPath),
-      }),
-    ].concat(isDev ? [new webpack.HotModuleReplacementPlugin()] : []),
+      new HtmlWebpackEnhancementPlugin(root),
+    ],
     resolve: {
       extensions: ['.js', '.ts', '.tsx'],
-      alias: {
-        'react-dom': '@hot-loader/react-dom',
-        '@': path.resolve(__dirname, 'resources/assets/src'),
-        readline: '@/scripts/cli/readline.ts',
-        prompts: 'prompts/lib/index.js',
-        assert: false,
-      },
+      alias: { '@': path.resolve(root, 'resources/assets/src') },
     },
     optimization: {
-      // @ts-ignore
-      minimizer: [new CssMinimizerPlugin({}), '...'],
+      minimizer: [new CssMinimizerPlugin(), '...'],
     },
-    experiments: {
-      syncWebAssembly: true,
-    },
-    devtool: isDev ? 'eval-source-map' : 'source-map',
-    devServer: {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-      },
-      host: '0.0.0.0',
-      hot: true,
-      hotOnly: true,
-      stats: 'errors-warnings',
-      allowedHosts: ['localhost'].concat(
-        isDev && isGitpod ? ['.gitpod.io'] : [],
-      ),
-    },
+    devtool: isDev ? 'source-map' : false,
     stats: 'errors-warnings',
-    ignoreWarnings: [/size limit/i],
+    performance: false,
   }
 }

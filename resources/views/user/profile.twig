@@ -17,7 +17,7 @@
           </button>
         </div>
         <div class="modal-body">
-          <div>{{ trans('user.profile.delete.modal-notice')|nl2br|raw }}</div>
+          <div>{{ trans('user.profile.delete.modal-notice')|e|nl2br }}</div>
           <br>
           <input type="password" class="form-control" required name="password"
             placeholder="{{ trans('user.profile.delete.password') }}" autocomplete="current-password">

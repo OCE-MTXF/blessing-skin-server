@@ -2,28 +2,20 @@
 
 namespace Tests;
 
-use App\Services\Plugin;
 use App\Services\PluginManager;
-use Illuminate\Foundation\Testing\DatabaseTransactions;
 
 class PluginEnableCommandTest extends TestCase
 {
-    use DatabaseTransactions;
-
-    public function testEnablePlugin()
+    public function testEnableReportsApprovalAndActivationResults(): void
     {
         $this->mock(PluginManager::class, function ($mock) {
-            $mock->shouldReceive('get')
-                ->with('my-plugin')
-                ->once()
-                ->andReturn(new Plugin('', ['title' => 'My Plugin']));
-            $mock->shouldReceive('enable')->with('nope')->once()->andReturn(false);
-            $mock->shouldReceive('enable')->with('my-plugin')->once()->andReturn(true);
+            $mock->shouldReceive('enable')->with('unreviewed')->once()->andReturn(false);
+            $mock->shouldReceive('enable')->with('demo')->once()->andReturn(true);
         });
 
-        $this->artisan('plugin:enable nope')
-            ->expectsOutput(trans('admin.plugins.operations.not-found'));
-        $this->artisan('plugin:enable my-plugin')
-            ->expectsOutput(trans('admin.plugins.operations.enabled', ['plugin' => 'My Plugin']));
+        $this->artisan('plugin:enable unreviewed')->assertExitCode(1);
+        $this->artisan('plugin:enable demo')
+            ->expectsOutput(trans('admin.plugins.operations.enabled', ['plugin' => 'demo']))
+            ->assertSuccessful();
     }
 }

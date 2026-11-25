@@ -6,9 +6,13 @@ use App\Models\Player;
 use App\Models\Texture;
 use App\Models\User;
 use App\Rules;
+use App\Services\Textures\TextureReferences;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PlayersManagementController extends Controller
 {
@@ -23,7 +27,7 @@ class PlayersManagementController extends Controller
             $currentUser = $request->user();
 
             if (
-                $owner->uid !== $currentUser->uid
+                $owner && $owner->uid !== $currentUser->uid
                 && $owner->permission >= $currentUser->permission
             ) {
                 return json(trans('admin.players.no-permission'), 1)
@@ -52,19 +56,25 @@ class PlayersManagementController extends Controller
                 new Rules\PlayerName(),
                 'min:'.option('player_name_length_min'),
                 'max:'.option('player_name_length_max'),
-                'unique:players,name',
+                Rule::unique('players', 'name')->ignoreModel($player),
             ],
         ])['player_name'];
 
-        $dispatcher->dispatch('player.renaming', [$player, $name]);
+        return DB::transaction(function () use ($player, $dispatcher, $name, $request) {
+            $player = Player::lockForUpdate()->findOrFail($player->pid);
+            $this->authorizeOwner($request->user(), $player->user);
+            $dispatcher->dispatch('player.renaming', [$player, $name]);
+            $oldName = $player->name;
+            $player->name = $name;
+            try {
+                $player->save();
+            } catch (UniqueConstraintViolationException) {
+                throw ValidationException::withMessages(['player_name' => trans('validation.unique', ['attribute' => 'player name'])]);
+            }
+            $dispatcher->dispatch('player.renamed', [$player, $oldName]);
 
-        $oldName = $player->name;
-        $player->name = $name;
-        $player->save();
-
-        $dispatcher->dispatch('player.renamed', [$player, $oldName]);
-
-        return json(trans('admin.players.name.success', ['player' => $player->name]), 0);
+            return json(trans('admin.players.name.success', ['player' => $player->name]), 0);
+        });
     }
 
     public function owner(
@@ -72,31 +82,37 @@ class PlayersManagementController extends Controller
         Request $request,
         Dispatcher $dispatcher,
     ) {
-        $uid = $request->validate(['uid' => 'required|integer'])['uid'];
+        $uid = (int) $request->validate(['uid' => 'required|integer'])['uid'];
 
-        $dispatcher->dispatch('player.owner.updating', [$player, $uid]);
+        return DB::transaction(function () use ($player, $uid, $request, $dispatcher) {
+            $user = User::lockForUpdate()->find($uid);
+            $player = Player::lockForUpdate()->findOrFail($player->pid);
+            $this->authorizeOwner($request->user(), $player->user);
+            $dispatcher->dispatch('player.owner.updating', [$player, $uid]);
+            if (!$user) {
+                return json(trans('admin.users.operations.non-existent'), 1);
+            }
+            $this->authorizeOwner($request->user(), $user);
+            if ($player->uid !== $uid) {
+                // Transfers grant neither the old owner's closet rights nor public profile attachments.
+                $player->tid_skin = $player->tid_cape = 0;
+                $player->uid = $uid;
+                $player->save();
+            }
+            $dispatcher->dispatch('player.owner.updated', [$player, $user]);
 
-        /** @var User */
-        $user = User::find($request->uid);
-        if (empty($user)) {
-            return json(trans('admin.users.operations.non-existent'), 1);
-        }
-
-        $player->uid = $uid;
-        $player->save();
-
-        $dispatcher->dispatch('player.owner.updated', [$player, $user]);
-
-        return json(trans('admin.players.owner.success', [
-            'player' => $player->name,
-            'user' => $user->nickname,
-        ]), 0);
+            return json(trans('admin.players.owner.success', ['player' => $player->name, 'user' => $user->nickname]), 0, [
+                'tid_skin' => $player->tid_skin,
+                'tid_cape' => $player->tid_cape,
+            ]);
+        });
     }
 
     public function texture(
         Player $player,
         Request $request,
         Dispatcher $dispatcher,
+        TextureReferences $references,
     ) {
         $data = $request->validate([
             'tid' => 'required|integer',
@@ -105,20 +121,29 @@ class PlayersManagementController extends Controller
         $tid = (int) $data['tid'];
         $type = $data['type'];
 
-        $dispatcher->dispatch('player.texture.updating', [$player, $type, $tid]);
+        return DB::transaction(function () use ($player, $tid, $type, $dispatcher, $references, $request) {
+            $texture = $tid > 0 ? Texture::lockForUpdate()->find($tid) : null;
+            $owner = User::lockForUpdate()->find($player->uid);
+            $fresh = Player::lockForUpdate()->findOrFail($player->pid);
+            abort_if($fresh->uid !== $player->uid, 409, 'The player owner changed. Reload and try again.');
+            $this->authorizeOwner($request->user(), $owner);
+            $dispatcher->dispatch('player.texture.updating', [$fresh, $type, $tid]);
+            if ($tid !== 0 && (!$texture || !$owner || !$references->accepts($owner, $texture, $type))) {
+                return json(trans('admin.players.textures.non-existent', ['tid' => $tid]), 1);
+            }
+            $field = 'tid_'.$type;
+            $previousTid = $fresh->$field;
+            $fresh->$field = $tid;
+            $fresh->save();
+            $dispatcher->dispatch('player.texture.updated', [$fresh, $type, $previousTid]);
 
-        if (Texture::where('tid', $tid)->doesntExist() && $tid !== 0) {
-            return json(trans('admin.players.textures.non-existent', ['tid' => $tid]), 1);
-        }
+            return json(trans('admin.players.textures.success', ['player' => $fresh->name]), 0);
+        });
+    }
 
-        $field = 'tid_'.$type;
-        $previousTid = $player->$field;
-        $player->$field = $tid;
-        $player->save();
-
-        $dispatcher->dispatch('player.texture.updated', [$player, $type, $previousTid]);
-
-        return json(trans('admin.players.textures.success', ['player' => $player->name]), 0);
+    private function authorizeOwner(User $actor, ?User $owner): void
+    {
+        abort_if($owner && $owner->uid !== $actor->uid && $owner->permission >= $actor->permission, 403, trans('admin.players.no-permission'));
     }
 
     public function delete(

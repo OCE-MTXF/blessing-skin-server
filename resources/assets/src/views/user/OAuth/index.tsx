@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { hot } from 'react-hot-loader/root'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
 import { showModal, toast } from '@/scripts/notify'
 import Loading from '@/components/Loading'
 import Row from './Row'
 import ModalCreate from './ModalCreate'
-import type { App } from './types'
+import { redirectText, type App } from './types'
 
 type Exception = {
   message: string
@@ -21,7 +20,7 @@ const OAuth: React.FC = () => {
     const getApps = async () => {
       setIsLoading(true)
       const allApps = await fetch.get<App[]>('/oauth/clients')
-      setApps(allApps)
+      setApps(Array.isArray(allApps) ? allApps : [])
       setIsLoading(false)
     }
     getApps()
@@ -58,12 +57,11 @@ const OAuth: React.FC = () => {
 
     const result = await fetch.put<App | Exception>(
       `/oauth/clients/${app.id}`,
-      { ...app, name },
+      { name, redirect: redirectText(app) },
     )
     if ('id' in result) {
       setApps((apps) => {
-        apps[index] = { ...app, name }
-        return apps.slice()
+        return apps.map((current, i) => i === index ? { ...current, ...result, name } : current)
       })
     } else {
       toast.error(result.message)
@@ -76,7 +74,7 @@ const OAuth: React.FC = () => {
       const { value } = await showModal({
         mode: 'prompt',
         title: t('user.oauth.redirect'),
-        input: app.redirect,
+        input: redirectText(app),
       })
       redirect = value
     } catch {
@@ -85,12 +83,11 @@ const OAuth: React.FC = () => {
 
     const result = await fetch.put<App | Exception>(
       `/oauth/clients/${app.id}`,
-      { ...app, redirect },
+      { name: app.name, redirect },
     )
     if ('id' in result) {
       setApps((apps) => {
-        apps[index] = { ...app, redirect }
-        return apps.slice()
+        return apps.map((current, i) => i === index ? { ...current, ...result, redirect, redirect_uris: result.redirect_uris } : current)
       })
     } else {
       toast.error(result.message)
@@ -107,8 +104,10 @@ const OAuth: React.FC = () => {
       return
     }
 
-    await fetch.del(`/oauth/clients/${app.id}`)
-    setApps((apps) => apps.filter((a) => a.id !== app.id))
+    const result = await fetch.del<{ code?: number; message?: string } | string>(`/oauth/clients/${app.id}`)
+    if (typeof result === 'string' || result?.code === 0) {
+      setApps((apps) => apps.filter((a) => a.id !== app.id))
+    }
   }
 
   return (
@@ -159,4 +158,4 @@ const OAuth: React.FC = () => {
   )
 }
 
-export default hot(OAuth)
+export default OAuth

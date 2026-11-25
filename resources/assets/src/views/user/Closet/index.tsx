@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { hot } from 'react-hot-loader/root'
-import debounce from 'lodash.debounce'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
@@ -20,14 +18,6 @@ import ModalApply from './ModalApply'
 import removeClosetItem from './removeClosetItem'
 
 type Category = 'skin' | 'cape'
-
-const updater = debounce(
-  <T extends unknown>(
-    value: React.SetStateAction<T>,
-    setter: React.Dispatch<React.SetStateAction<T>>,
-  ) => setter(value),
-  350,
-)
 
 const Closet: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true)
@@ -71,6 +61,15 @@ const Closet: React.FC = () => {
     getItems()
   }, [category, query, page])
 
+  useEffect(() => {
+    if (search === query) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => setQuery(search), 350)
+    return () => window.clearTimeout(timeout)
+  }, [search, query])
+
   const switchCategoryToSkin = () => {
     if (category !== 'skin') {
       setCategory('skin')
@@ -83,12 +82,6 @@ const Closet: React.FC = () => {
       setCategory('cape')
       setPage(1)
     }
-  }
-
-  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value
-    setSearch(value)
-    updater(value, setQuery)
   }
 
   const handlePageChange = (page: number) => setPage(page)
@@ -155,13 +148,23 @@ const Closet: React.FC = () => {
     }
   }
 
+  const hasPrivateSelection = Boolean(
+    (skin && !skin.public) || (cape && !cape.public),
+  )
+
   const applyToPlayer = () => {
+    if (hasPrivateSelection) {
+      return
+    }
     if (!skin && !cape) {
       toast.info(t('user.emptySelectedTexture'))
       return
     }
     setShowModalApply(true)
   }
+
+  const emptyClosetKey = 'user.closet.empty'
+  const emptyClosetText = t(emptyClosetKey)
 
   return (
     <>
@@ -209,7 +212,7 @@ const Closet: React.FC = () => {
                 className="form-control mr-sm-2"
                 aria-label="Search"
                 placeholder={t('user.typeToSearch')}
-                onChange={handleSearch}
+                onChange={(event) => setSearch(event.target.value)}
               />
             </div>
           </div>
@@ -226,13 +229,18 @@ const Closet: React.FC = () => {
               {search ? (
                 t('general.noResult')
               ) : (
-                <span
-                  dangerouslySetInnerHTML={{
-                    __html: t('user.emptyClosetMsg', {
-                      url: `${blessing.base_url}/skinlib?filter=${category}`,
-                    }),
-                  }}
-                ></span>
+                <>
+                  <p>
+                    {emptyClosetText === emptyClosetKey
+                      ? t('general.noResult')
+                      : emptyClosetText}
+                  </p>
+                  <a
+                    href={`${blessing.base_url}${urls.skinlib.home()}?filter=${category}`}
+                  >
+                    {t('user.viewInSkinlib')}
+                  </a>
+                </>
               )}
             </div>
           ) : (
@@ -261,28 +269,37 @@ const Closet: React.FC = () => {
         </div>
       </div>
       <Previewer
-        skin={skin?.hash}
-        cape={cape?.hash}
+        skin={skin?.tid}
+        cape={cape?.tid}
         isAlex={skin?.type === TextureType.Alex}
       >
         <div className="d-flex justify-content-between">
-          <button className="btn btn-primary" onClick={applyToPlayer}>
+          <button
+            className="btn btn-primary"
+            onClick={applyToPlayer}
+            disabled={hasPrivateSelection}
+          >
             {t('user.useAs')}
           </button>
           <button className="btn btn-default" onClick={resetSelected}>
             {t('user.resetSelected')}
           </button>
         </div>
+        {hasPrivateSelection && (
+          <p className="small text-muted mt-2 mb-0">
+            {t('skinlib.publishToUse')}
+          </p>
+        )}
       </Previewer>
       <ModalApply
-        show={showModalApply}
+        show={showModalApply && !hasPrivateSelection}
         canAdd
-        skin={skin?.tid}
-        cape={cape?.tid}
+        skin={skin?.public ? skin.tid : undefined}
+        cape={cape?.public ? cape.tid : undefined}
         onClose={() => setShowModalApply(false)}
       />
     </>
   )
 }
 
-export default hot(Closet)
+export default Closet

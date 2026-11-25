@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { hot } from 'react-hot-loader/root'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
@@ -35,7 +34,7 @@ const Reset: React.FC = () => {
 
     setIsPending(true)
     const { code, message } = await fetch.post<fetch.ResponseBody>(
-      location.href.replace(blessing.base_url, ''),
+      location.pathname.slice(new URL(blessing.base_url || location.origin).pathname.replace(/\/$/, '').length) + location.search,
       { password },
     )
     if (code === 0) {
@@ -108,4 +107,4 @@ const Reset: React.FC = () => {
   )
 }
 
-export default hot(Reset)
+export default Reset

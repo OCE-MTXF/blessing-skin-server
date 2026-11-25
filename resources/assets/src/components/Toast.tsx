@@ -5,6 +5,7 @@ import { css } from '@emotion/react'
 export type ToastType = 'success' | 'info' | 'warning' | 'error'
 
 interface Props {
+  children?: React.ReactNode
   type: ToastType
   distance: number
   onClose(): void | Promise<void>

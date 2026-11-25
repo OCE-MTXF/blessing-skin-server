@@ -1,8 +1,9 @@
 import React from 'react'
 import styled from '@emotion/styled'
 import { t } from '@/scripts/i18n'
-import type { Plugin } from './types'
 import clsx from 'clsx'
+import { canManagePlugin } from './types'
+import type { Plugin } from './types'
 
 const Box = styled.div`
   cursor: default;
@@ -41,28 +42,29 @@ const Description = styled.div`
 
 interface Props {
   plugin: Plugin
-  onEnable(plugin: Plugin): void
-  onDisable(plugin: Plugin): void
-  onDelete(plugin: Plugin): void
-  baseUrl: string
+  baseUrl: string | undefined
+  isManaging: boolean
+  onToggle(enabled: boolean): void
 }
 
-const InfoBox: React.FC<Props> = (props) => {
-  const { plugin } = props
-
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    event.preventDefault()
-
-    if (event.target.checked) {
-      props.onEnable(plugin)
-    } else {
-      props.onDisable(plugin)
-    }
-  }
-
-  const handleDelete = () => props.onDelete(plugin)
-
+const InfoBox: React.FC<Props> = ({
+  plugin,
+  baseUrl,
+  isManaging,
+  onToggle,
+}) => {
+  const canManage = canManagePlugin(plugin)
+  const enabled = plugin.enabled === true
+  const toggleLabel = t(enabled ? 'admin.disablePlugin' : 'admin.enablePlugin')
   const isDarkMode = document.body.classList.contains('dark-mode')
+  // URL parsing treats these names as dot segments, not plugin identifiers.
+  const pluginUrl =
+    baseUrl && plugin.name && plugin.name !== '.' && plugin.name !== '..'
+      ? `${baseUrl}/admin/plugins`
+      : undefined
+  const nameSegment = pluginUrl ? encodeURIComponent(plugin.name) : undefined
+  const showReadme = plugin.approved === true && plugin.readme === true
+  const showConfig = canManage && enabled && plugin.config === true
 
   return (
     <Box className={clsx('info-box', 'mr-3', { 'bg-gray-dark': isDarkMode })}>
@@ -72,17 +74,17 @@ const InfoBox: React.FC<Props> = (props) => {
       <div className="info-box-content">
         <div className="d-flex justify-content-between">
           <Header>
-            <input
-              className="mr-2 d-inline-block"
-              type="checkbox"
-              checked={plugin.enabled}
-              title={
-                plugin.enabled
-                  ? t('admin.disablePlugin')
-                  : t('admin.enablePlugin')
-              }
-              onChange={handleChange}
-            />
+            {canManage && (
+              <input
+                className="mr-2 d-inline-block"
+                type="checkbox"
+                checked={enabled}
+                disabled={isManaging}
+                title={toggleLabel}
+                aria-label={`${toggleLabel}: ${plugin.title}`}
+                onChange={(event) => onToggle(event.currentTarget.checked)}
+              />
+            )}
             <strong className="d-inline-block mr-2 text-truncate">
               {plugin.title}
             </strong>
@@ -91,29 +93,24 @@ const InfoBox: React.FC<Props> = (props) => {
             </span>
           </Header>
           <div>
-            {plugin.readme && (
+            {pluginUrl && nameSegment && showReadme && (
               <ActionButton
-                href={`${props.baseUrl}/admin/plugins/readme/${plugin.name}`}
+                href={`${pluginUrl}/readme/${nameSegment}`}
                 title={t('admin.pluginReadme')}
+                aria-label={t('admin.pluginReadme')}
               >
-                <i className="fas fa-question" />
+                <i className="fas fa-question" aria-hidden="true" />
               </ActionButton>
             )}
-            {plugin.enabled && plugin.config && (
+            {pluginUrl && nameSegment && showConfig && (
               <ActionButton
-                href={`${props.baseUrl}/admin/plugins/config/${plugin.name}`}
+                href={`${pluginUrl}/config/${nameSegment}`}
                 title={t('admin.configurePlugin')}
+                aria-label={t('admin.configurePlugin')}
               >
-                <i className="fas fa-cog" />
+                <i className="fas fa-cog" aria-hidden="true" />
               </ActionButton>
             )}
-            <ActionButton
-              href="#"
-              title={t('admin.deletePlugin')}
-              onClick={handleDelete}
-            >
-              <i className="fas fa-trash" />
-            </ActionButton>
           </div>
         </div>
         <Description className="mt-2 text-truncate" title={plugin.description}>

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react'
-import { hot } from 'react-hot-loader/root'
 import { useImmer } from 'use-immer'
 import useIsLargeScreen from '@/scripts/hooks/useIsLargeScreen'
 import { t } from '@/scripts/i18n'
@@ -108,14 +107,20 @@ const PlayersManagement: React.FC = () => {
       return
     }
 
-    const { code, message } = await fetch.put<fetch.ResponseBody>(
-      urls.admin.players.owner(player.pid),
-      { uid },
-    )
+    const { code, message, data } = await fetch.put<
+      fetch.ResponseBody<Pick<Player, 'tid_skin' | 'tid_cape'>>
+    >(urls.admin.players.owner(player.pid), { uid })
     if (code === 0) {
       toast.success(message)
       setPlayers((players) => {
-        players[index]!.uid = uid
+        const current = players[index]
+        if (current?.pid === player.pid) {
+          if (current.uid !== uid) {
+            current.tid_skin = data?.tid_skin ?? 0
+            current.tid_cape = data?.tid_cape ?? 0
+          }
+          current.uid = uid
+        }
       })
     } else {
       toast.error(message)
@@ -268,4 +273,4 @@ const PlayersManagement: React.FC = () => {
   )
 }
 
-export default hot(PlayersManagement)
+export default PlayersManagement

@@ -77,10 +77,6 @@ export default [
     el: '.content > .container-fluid',
   },
   {
-    path: 'admin/update',
-    module: [() => import('../views/admin/Update')],
-  },
-  {
     path: 'auth/login',
     react: () => import('../views/auth/Login'),
     el: 'main',

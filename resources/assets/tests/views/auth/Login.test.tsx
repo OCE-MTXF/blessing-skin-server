@@ -34,7 +34,7 @@ describe('submit form', () => {
     })
     fireEvent.click(getByText(t('auth.login')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.login(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.auth.login(), {
         identification: 'a@b.c',
         password: 'password',
         keep: false,
@@ -61,7 +61,7 @@ describe('submit form', () => {
     fireEvent.click(getByLabelText(t('auth.keep')))
     fireEvent.click(getByText(t('auth.login')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.login(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.auth.login(), {
         identification: 'a@b.c',
         password: 'password',
         keep: true,
@@ -85,7 +85,7 @@ describe('submit form', () => {
     })
     fireEvent.click(getByText(t('auth.login')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.login(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.auth.login(), {
         identification: 'a@b.c',
         password: 'password',
         keep: false,
@@ -111,7 +111,7 @@ describe('submit form', () => {
     })
     fireEvent.click(getByText(t('auth.login')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.login(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.auth.login(), {
         identification: 'a@b.c',
         password: 'password',
         keep: false,
@@ -127,7 +127,7 @@ describe('submit form', () => {
     })
     fireEvent.click(getByText(t('auth.login')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.login(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.auth.login(), {
         identification: 'a@b.c',
         password: 'password',
         keep: false,
@@ -136,15 +136,9 @@ describe('submit form', () => {
     )
   })
 
-  it('too many fails with normal recaptcha', async () => {
-    window.blessing.extra.recaptcha = 'sitekey'
-    fetch.post.mockResolvedValue({
-      code: 1,
-      message: 'failed',
-      data: { login_fails: 4 },
-    })
-
-    const { getByPlaceholderText, getByText, queryByText } = render(<Login />)
+  it('shows throttling feedback even without a login counter', async () => {
+    fetch.post.mockResolvedValue({ code: 1, message: 'Please try again later.' })
+    const { getByPlaceholderText, getByText, findByText } = render(<Login />)
     fireEvent.input(getByPlaceholderText(t('auth.identification')), {
       target: { value: 'a@b.c' },
     })
@@ -152,43 +146,6 @@ describe('submit form', () => {
       target: { value: 'password' },
     })
     fireEvent.click(getByText(t('auth.login')))
-    await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.login(), {
-        identification: 'a@b.c',
-        password: 'password',
-        keep: false,
-      }),
-    )
-    expect(queryByText('failed')).toBeInTheDocument()
-  })
-
-  it('too many fails with invisible recaptcha', async () => {
-    window.blessing.extra.recaptcha = 'sitekey'
-    window.blessing.extra.invisible = true
-    fetch.post.mockResolvedValue({
-      code: 1,
-      message: 'failed',
-      data: { login_fails: 4 },
-    })
-
-    const { getByPlaceholderText, getByText, queryByText } = render(<Login />)
-    fireEvent.input(getByPlaceholderText(t('auth.identification')), {
-      target: { value: 'a@b.c' },
-    })
-    fireEvent.input(getByPlaceholderText(t('auth.password')), {
-      target: { value: 'password' },
-    })
-    fireEvent.click(getByText(t('auth.login')))
-    await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.login(), {
-        identification: 'a@b.c',
-        password: 'password',
-        keep: false,
-      }),
-    )
-    expect(queryByText('failed')).toBeInTheDocument()
-    expect(queryByText(t('auth.tooManyFails.recaptcha'))).toBeInTheDocument()
-
-    fireEvent.click(getByText(t('general.confirm')))
+    expect(await findByText('Please try again later.')).toBeInTheDocument()
   })
 })

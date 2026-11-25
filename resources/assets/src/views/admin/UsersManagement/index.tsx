@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react'
-import { hot } from 'react-hot-loader/root'
 import { useImmer } from 'use-immer'
 import useBlessingExtra from '@/scripts/hooks/useBlessingExtra'
 import useIsLargeScreen from '@/scripts/hooks/useIsLargeScreen'
@@ -197,13 +196,15 @@ const UsersManagement: React.FC = () => {
   }
 
   const handleVerificationToggle = async (user: User, index: number) => {
-    const { code, message } = await fetch.put<fetch.ResponseBody>(
-      urls.admin.users.verification(user.uid),
-    )
+    const { code, message, data } = await fetch.put<
+      fetch.ResponseBody<{ verified: boolean }>
+    >(urls.admin.users.verification(user.uid))
     if (code === 0) {
       toast.success(message)
+      // Sending a verification email never verifies the mailbox itself.
+      const verified = data?.verified ?? false
       setUsers((users) => {
-        users[index]!.verified = !users[index]!.verified
+        users[index]!.verified = verified
       })
     } else {
       toast.error(message)
@@ -236,16 +237,29 @@ const UsersManagement: React.FC = () => {
   }
 
   const handleDelete = async (user: User) => {
+    let password: string
     try {
       await showModal({
         text: t('admin.deleteUserNotice'),
         okButtonType: 'danger',
       })
+      const { value } = await showModal({
+        mode: 'prompt',
+        text: t('admin.deleteUserPassword'),
+        inputType: 'password',
+        placeholder: t('auth.password'),
+        okButtonType: 'danger',
+        validator: (value: string) => value.length === 0 ? t('admin.deleteUserPassword') : undefined,
+      })
+      password = value
     } catch {
       return
     }
 
-    const { code, message } = await fetch.del(urls.admin.users.delete(user.uid))
+    const { code, message } = await fetch.del(urls.admin.users.delete(user.uid), {
+      password,
+      confirmation: 'delete',
+    })
     if (code === 0) {
       toast.success(message)
       setUsers((users) => users.filter(({ uid }) => uid !== user.uid))
@@ -367,4 +381,4 @@ const UsersManagement: React.FC = () => {
   )
 }
 
-export default hot(UsersManagement)
+export default UsersManagement

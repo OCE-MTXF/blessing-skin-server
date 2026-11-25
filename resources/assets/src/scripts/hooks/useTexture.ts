@@ -1,26 +1,33 @@
 import { useState, useEffect } from 'react'
 import * as fetch from '../net'
-import { Texture, TextureType } from '../types'
+import textureAssetUrl from '../textureAssetUrl'
+import type { Texture } from '../types'
+import urls from '../urls'
 
-export default function useTexture() {
-  const [tid, setTid] = useState(0)
-  const [url, setUrl] = useState('')
-  const [type, setType] = useState(TextureType.Steve)
+export default function useTexture(tid?: number) {
+  const url = textureAssetUrl(tid)
+  const [metadata, setMetadata] = useState<Pick<Texture, 'tid' | 'type'>>()
 
   useEffect(() => {
-    if (tid <= 0) {
-      setUrl('')
+    if (tid === undefined || !url) {
       return
     }
 
-    const getTexture = async () => {
-      const { hash, type } = await fetch.get<Texture>(`/skinlib/info/${tid}`)
-
-      setUrl(`${blessing.base_url}/textures/${hash}`)
-      setType(type)
+    let current = true
+    const getModel = async () => {
+      const { type } = await fetch.get<Texture>(urls.skinlib.info(tid))
+      if (current) {
+        setMetadata({ tid, type })
+      }
     }
-    getTexture()
-  }, [tid])
+    getModel()
+    return () => {
+      current = false
+    }
+  }, [tid, url])
 
-  return [{ url, type }, setTid] as const
+  return {
+    url,
+    type: metadata && metadata.tid === tid ? metadata.type : undefined,
+  }
 }

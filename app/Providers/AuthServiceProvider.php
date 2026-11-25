@@ -3,34 +3,50 @@
 namespace App\Providers;
 
 use App\Models\Scope;
+use App\Models\User;
+use App\Services\Auth\AccountAccessTokens;
+use App\Services\Auth\AccountSecurity;
+use App\Services\Installation\Readiness;
+use DateInterval;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Event;
+use Laravel\Passport\Bridge\AccessTokenRepository;
 use Laravel\Passport\Passport;
+use Throwable;
 
 class AuthServiceProvider extends ServiceProvider
 {
-    /**
-     * The model to policy mappings for the application.
-     *
-     * @var array<class-string, class-string>
-     */
-    protected $policies = [
-    ];
+    public function register(): void
+    {
+        parent::register();
+        Passport::ignoreRoutes();
+        Passport::$clientUuids = false;
+        Passport::$deviceCodeGrantEnabled = false;
+        $this->app->bind(AccessTokenRepository::class, AccountAccessTokens::class);
+    }
 
-    /**
-     * Register any authentication / authorization services.
-     */
     public function boot(): void
     {
-        $defaultScopes = [
+        Event::listen(Login::class, static function (Login $login) {
+            if ($login->guard === 'web' && $login->user instanceof User) {
+                Auth::guard('web')->getSession()->put(AccountSecurity::SESSION_VERSION, $login->user->account_version);
+            }
+        });
+        Passport::authorizationView('auth.oauth-authorize');
+        Passport::tokensExpireIn(new DateInterval('PT1H'));
+        Passport::refreshTokensExpireIn(new DateInterval('P30D'));
+        Passport::personalAccessTokensExpireIn(new DateInterval('P30D'));
+        $defaults = [
             'User.Read' => 'auth.oauth.scope.user.read',
             'Notification.Read' => 'auth.oauth.scope.notification.read',
             'Notification.ReadWrite' => 'auth.oauth.scope.notification.readwrite',
+            'Notification.Acknowledge' => 'Mark your notifications as read',
             'Player.Read' => 'auth.oauth.scope.player.read',
             'Player.ReadWrite' => 'auth.oauth.scope.player.readwrite',
             'Closet.Read' => 'auth.oauth.scope.closet.read',
-            'Closet.ReadWrtie' => 'auth.oauth.scope.closet.readwrite',
+            'Closet.ReadWrite' => 'auth.oauth.scope.closet.readwrite',
             'UsersManagement.Read' => 'auth.oauth.scope.users-management.read',
             'UsersManagement.ReadWrite' => 'auth.oauth.scope.users-management.readwrite',
             'PlayersManagement.Read' => 'auth.oauth.scope.players-management.read',
@@ -40,23 +56,16 @@ class AuthServiceProvider extends ServiceProvider
             'ReportsManagement.Read' => 'auth.oauth.scope.reports-management.read',
             'ReportsManagement.ReadWrite' => 'auth.oauth.scope.reports-management.readwrite',
         ];
-
-        /*
-         * Return empty scopes if running unit tests or before installation.
-         * In these cases, migrations aren’t run yet, so DB queries will fail.
-         * OAuth isn’t tested in unit tests, so returning empty scopes should be fine...?
-         * Maybe the best approach is to run migrations before bootstrap in tests,
-         * but this seems impossible for DB_DATABASE=:memory:;
-         * Or change how scopes are registered so they don't depend on the database,
-         * but that may introduce BREAKING CHANGES and plugin incompatibility.
-         * PRs welcome for better solutions!
-         */
-        $scopes = (app()->runningUnitTests() || !Storage::disk('root')->exists('storage/install.lock')) ? [] : Cache::rememberForever('scopes', function () {
-            return Scope::pluck('description', 'name')->toArray();
-        });
-
-        Passport::tokensCan(array_merge($defaultScopes, $scopes));
-
+        $custom = [];
+        try {
+            if (app(Readiness::class)->isReady()) {
+                $custom = Scope::pluck('description', 'name')->toArray();
+                unset($custom['Closet.ReadWrtie'], $custom['*']);
+            }
+        } catch (Throwable) {
+            // Be conservative during startup, migrations, and a transient DB outage.
+        }
+        Passport::tokensCan($defaults + $custom);
         Passport::setDefaultScope(['User.Read']);
     }
 }

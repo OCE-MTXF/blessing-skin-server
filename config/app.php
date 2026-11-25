@@ -13,22 +13,7 @@ return [
     |
     */
 
-    'version' => '6.0.2',
-
-    /*
-    |--------------------------------------------------------------------------
-    | Update Source
-    |--------------------------------------------------------------------------
-    |
-    | Where to get information of new versions.
-    |
-    */
-
-    'update_source' => env(
-        'UPDATE_SOURCE',
-        'https://dev.azure.com/blessing-skin/51010f6d-9f99-40f1-a262-0a67f788df32/_apis/git/'.
-        'repositories/a9ff8df7-6dc3-4ff8-bb22-4871d3a43936/Items?path=%2Fupdate.json'
-    ),
+    'version' => '6.0.3',
 
     /*
     |--------------------------------------------------------------------------
@@ -67,7 +52,7 @@ return [
     |
     */
 
-    'debug' => (bool) env('APP_DEBUG', false),
+    'debug' => env('APP_ENV', 'production') !== 'production' && (bool) env('APP_DEBUG', false),
 
     /*
     |--------------------------------------------------------------------------
@@ -81,6 +66,8 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
+
+    'trusted_proxies' => env('APP_TRUSTED_PROXIES', ''),
 
     /*
     |--------------------------------------------------------------------------

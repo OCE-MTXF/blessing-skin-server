@@ -19,5 +19,4 @@
   {% endif %}
 </div>
 
-{% set rules = {'{site_name}': site_name, '{site_url}': site_url} %}
-{{ custom_copyright|replace(rules)|raw }}
+{{ custom_copyright_html|raw }}

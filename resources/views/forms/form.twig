@@ -8,7 +8,7 @@
     <div class="card-body">
       {% for message in messages %}
         <div class="callout callout-{{ message.type }}">
-          {{ message.content|raw }}
+          {{ message.content }}
         </div>
       {% endfor %}
 
@@ -31,7 +31,7 @@
         {% for item in items %}
           {{ item.render()|raw }}
           {% if item.description %}
-            <p class="description">{{ item.description|raw }}</p>
+            <p class="description">{{ item.description }}</p>
           {% endif %}
         {% endfor %}
       {% else %}
@@ -46,7 +46,7 @@
               <div class="col-sm-{{ renderInputTagsOnly ? '12' : '8' }}">
                 {{ item.render()|raw }}
                 {% if item.description %}
-                  <p class="description">{{ item.description|raw }}</p>
+                  <p class="description">{{ item.description }}</p>
                 {% endif %}
               </div>
             </div>
@@ -58,7 +58,7 @@
       {% for button in buttons %}
         {% if button.href %}
           <a href="{{ button.href }}" class="{{ button.class|join(' ') }}">
-            {{ button.text|raw }}
+            {{ button.text }}
           </a>
         {% else %}
           <button
@@ -66,7 +66,7 @@
             name="{{ button.name }}"
             class="{{ button.class|join(' ') }}"
           >
-            {{ button.text|raw }}
+            {{ button.text }}
           </button>
         {% endif %}
       {% endfor %}

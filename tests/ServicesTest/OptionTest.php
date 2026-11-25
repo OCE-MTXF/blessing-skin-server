@@ -27,16 +27,11 @@ class OptionTest extends TestCase
         $this->assertEquals('v2', $options->get('k2'));
     }
 
-    public function testReadFromCache()
+    public function testMissingOptionReadNeverExecutesAFileOrWritesTheDefault(): void
     {
-        $this->mock(\Illuminate\Filesystem\Filesystem::class, function ($mock) {
-            $path = storage_path('options.php');
-            $mock->shouldReceive('exists')->with($path)->once()->andReturn(true);
-            $mock->shouldReceive('getRequire')->with($path)->once()->andReturn(['k' => 'v']);
-        });
-
-        app()->forgetInstance(Option::class);
+        file_put_contents(storage_path('options.php'), '<?php throw new \\RuntimeException("must not execute");');
         $options = resolve(Option::class);
-        $this->assertEquals('v', $options->get('k'));
+        $this->assertSame('fallback', $options->get('testing-key', 'fallback'));
+        $this->assertDatabaseMissing('options', ['option_name' => 'testing-key']);
     }
 }

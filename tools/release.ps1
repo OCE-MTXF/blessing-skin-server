@@ -1,33 +1,17 @@
-$manifest = Invoke-WebRequest 'https://dev.azure.com/blessing-skin/51010f6d-9f99-40f1-a262-0a67f788df32/_apis/git/repositories/a9ff8df7-6dc3-4ff8-bb22-4871d3a43936/Items?path=%2Fupdate.json' | ConvertFrom-Json
-$last = $manifest.latest
-$current = (Get-Content package.json | ConvertFrom-Json).version
-
-# Install dependencies
-composer install --no-dev --prefer-dist --no-progress
-Remove-Item vendor/bin -Recurse -Force
-yarn
-Write-Host "Dependencies have been installed." -ForegroundColor Green
-./tools/build.ps1
-
-$zip = "blessing-skin-server-$current.zip"
-zip -9 -r $zip app bootstrap config database plugins public resources/lang resources/views resources/misc/textures routes storage vendor .env.example artisan LICENSE README.md README-zh.md index.html
-Write-Host "Zip archive is created." -ForegroundColor Green
-
-New-Item dist -ItemType Directory
-Set-Location dist
-Copy-Item -Path "../$zip" -Destination $zip
-
-$manifest.latest = $current
-$manifest.url = $manifest.url.Replace($last, $current)
-$manifest.php = '8.1.0'
-ConvertTo-Json $manifest | Out-File -FilePath update.json
-Write-Host "Update source is prepared." -ForegroundColor Green
-
-$azureToken = $env:AZURE_TOKEN
-git config --global user.email 'g-plane@hotmail.com'
-git config --global user.name 'Pig Fang'
-git init
-git add .
-git commit -m "Publish"
-git push -f "https://anything:$azureToken@dev.azure.com/blessing-skin/Blessing%20Skin%20Server/_git/Blessing%20Skin%20Server" master
-Write-Host "Update source is pushed to Azure Repos." -ForegroundColor Green
+# Optional wrapper around the PHP release builder. Does not publish or deploy.
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)][string] $ComposerPhar,
+    [string] $Php = 'php',
+    [string] $OutputDirectory = (Join-Path (Split-Path -Parent $PSScriptRoot) 'target/release'),
+    [Parameter(Mandatory)][string] $ExpectedVersion,
+    [switch] $ValidateOnly
+)
+$ErrorActionPreference = 'Continue' # Windows PowerShell 5 can convert native stderr to ErrorRecords.
+$repo = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
+$composer = (Resolve-Path -LiteralPath $ComposerPhar -ErrorAction Stop).Path
+$output = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
+$arguments = @((Join-Path $PSScriptRoot 'release.php'), 'build', $repo, $output, $ExpectedVersion, $composer)
+if ($ValidateOnly) { $arguments += '--validate-only' }
+& $Php @arguments
+exit $LASTEXITCODE

@@ -1,26 +1,12 @@
-import React from 'react'
+import type { ReactNode } from 'react'
 
 export interface Props {
   text?: string
-  dangerousHTML?: string
+  children?: ReactNode
 }
 
-const ModalContent: React.FC<Props> = (props) => {
-  if (props.children) {
-    return <>{props.children}</>
-  } else if (props.text) {
-    return (
-      <>
-        {props.text.split(/\r?\n/).map((line, i) => (
-          <p key={i}>{line}</p>
-        ))}
-      </>
-    )
-  } else if (props.dangerousHTML) {
-    return <div dangerouslySetInnerHTML={{ __html: props.dangerousHTML }} />
-  }
-
-  return <></>
+export default function ModalContent({ children, text }: Props) {
+  if (children) return <>{children}</>
+  if (!text) return null
+  return <>{text.split(/\r?\n/).map((line, i) => <p key={i}>{line}</p>)}</>
 }
-
-export default ModalContent

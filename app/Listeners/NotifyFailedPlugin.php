@@ -2,20 +2,18 @@
 
 namespace App\Listeners;
 
-use App\Models\User;
+use App\Events\RenderingFooter;
 use Illuminate\Support\Facades\Event;
 
 class NotifyFailedPlugin
 {
-    public function handle($event)
+    public function handle($event): void
     {
         $plugin = $event->plugin;
-        Event::listen(\App\Events\RenderingFooter::class, function ($event) use ($plugin) {
-            /** @var User */
-            $user = auth()->user();
-            if ($user && $user->isAdmin()) {
-                $message = trans('errors.plugins.boot', ['plugin' => trans($plugin->title)]);
-                $event->addContent("<script>blessing.notify.toast.error('$message')</script>");
+        Event::listen(RenderingFooter::class, function (RenderingFooter $event) use ($plugin) {
+            if (auth()->user()?->isAdmin()) {
+                $message = trans('errors.plugins.boot', ['plugin' => $plugin->displayTitle()]);
+                $event->addContent('<div class="alert alert-danger" role="alert">'.e($message).'</div>');
             }
         });
     }

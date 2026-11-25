@@ -65,6 +65,9 @@ oauth:
     introduction: A 3rd-party application ":name" is requesting permission to access your account.
     button: Authorize
     permissions: Permissions
+    return-title: Return to your local application
+    return-explanation: Continue to return to the application on this device. Only continue if you started the request from that application.
+    return-link: Continue to application
   scope:
     user:
       read: Sign you in and read your profile

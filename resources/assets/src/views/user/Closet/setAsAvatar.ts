@@ -1,9 +1,18 @@
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
 import { showModal, toast } from '@/scripts/notify'
+import type { Texture } from '@/scripts/types'
 import urls from '@/scripts/urls'
 
-export default async function setAsAvatar(tid: number) {
+export default async function setAsAvatar({
+  tid,
+  public: isPublic,
+}: Pick<Texture, 'tid' | 'public'>) {
+  if (!isPublic) {
+    toast.info(t('skinlib.publishToUse'))
+    return
+  }
+
   try {
     await showModal({
       title: t('user.setAvatar'),

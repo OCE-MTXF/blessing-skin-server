@@ -1,28 +1,19 @@
 {
-  "extends": "@gplane/tsconfig",
   "compilerOptions": {
-    "target": "es2017",
+    "target": "es2020",
     "module": "esnext",
-    "moduleResolution": "node",
-    "declaration": false,
-    "declarationMap": false,
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./resources/assets/src/*"]
     },
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "esModuleInterop": true
   },
-  "include": [
-    "resources/assets/src",
-    "resources/assets/webpack.d.ts",
-    "tools",
-    "webpack.config.ts"
-  ],
-  "ts-node": {
-    "compilerOptions": {
-      "noUnusedLocals": false,
-      "noUnusedParameters": false,
-      "module": "commonjs"
-    }
-  }
+  "include": ["resources/assets/src", "tools", "webpack.config.ts"]
 }

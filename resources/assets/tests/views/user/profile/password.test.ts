@@ -36,19 +36,19 @@ test('change password', async () => {
   const event = new Event('submit')
   form.dispatchEvent(event)
   await flushPromises()
-  expect(post).not.toBeCalled()
-  expect(toast.error).toBeCalledWith(t('auth.invalidConfirmPwd'))
+  expect(post).not.toHaveBeenCalled()
+  expect(toast.error).toHaveBeenCalledWith(t('auth.invalidConfirmPwd'))
 
   confirm.value = '1'
   form.dispatchEvent(event)
   await flushPromises()
-  expect(post).toBeCalledWith('/user/profile?action=password', {
+  expect(post).toHaveBeenCalledWith('/user/profile?action=password', {
     current_password: '1',
     new_password: '1',
   })
-  expect(showModal).toBeCalledWith({ mode: 'alert', text: 'w' })
+  expect(showModal).toHaveBeenCalledWith({ mode: 'alert', text: 'w' })
 
   form.dispatchEvent(event)
   await flushPromises()
-  expect(showModal).toBeCalledWith({ mode: 'alert', text: 'o' })
+  expect(showModal).toHaveBeenCalledWith({ mode: 'alert', text: 'o' })
 })

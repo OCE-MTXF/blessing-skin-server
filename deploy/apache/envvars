@@ -1,0 +1,8 @@
+# Used by apache2ctl and the official php:apache startup script as a non-root user.
+export APACHE_RUN_USER=www-data
+export APACHE_RUN_GROUP=www-data
+export APACHE_RUN_DIR=/tmp/blessing-apache
+export APACHE_PID_FILE="$APACHE_RUN_DIR/apache2.pid"
+export APACHE_LOCK_DIR="$APACHE_RUN_DIR"
+export APACHE_LOG_DIR="$APACHE_RUN_DIR"
+export LANG=C

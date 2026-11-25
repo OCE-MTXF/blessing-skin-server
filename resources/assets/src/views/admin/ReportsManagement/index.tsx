@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { hot } from 'react-hot-loader/root'
 import { useImmer } from 'use-immer'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
-import { Paginator, Texture, TextureType } from '@/scripts/types'
 import { toast, showModal } from '@/scripts/notify'
+import textureAssetUrl from '@/scripts/textureAssetUrl'
+import { Paginator, Texture, TextureType } from '@/scripts/types'
 import Loading from '@/components/Loading'
 import Pagination from '@/components/Pagination'
 import ViewerSkeleton from '@/components/ViewerSkeleton'
@@ -82,8 +82,7 @@ const ReportsManagement: React.FC = () => {
     handleProceedReport(report, index, 'delete')
   }
 
-  const textureUrl =
-    viewingTexture && `${blessing.base_url}/textures/${viewingTexture.hash}`
+  const textureUrl = textureAssetUrl(viewingTexture?.tid)
 
   return (
     <div className="row">
@@ -152,4 +151,4 @@ const ReportsManagement: React.FC = () => {
   )
 }
 
-export default hot(ReportsManagement)
+export default ReportsManagement

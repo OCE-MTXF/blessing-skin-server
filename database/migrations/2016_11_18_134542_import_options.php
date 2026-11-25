@@ -11,11 +11,12 @@ class ImportOptions extends Migration
         // import options
         $options = config('options');
 
-        $options['version'] = config('app.version');
+        // Lifecycle records the installed version only after migration and schema checks.
+        unset($options['version']);
 
         $options['announcement'] = str_replace(
             '{version}',
-            $options['version'],
+            config('app.version'),
             $options['announcement']
         );
 

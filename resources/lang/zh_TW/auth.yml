@@ -57,6 +57,9 @@ oauth:
     introduction: 第三方軟體 :name 正在向你請求獲取權限。
     button: 認證
     permissions: 權限
+    return-title: 返回本機應用程式
+    return-explanation: 僅在確認是本機應用程式發出這項請求時，按下繼續返回該應用程式。
+    return-link: 繼續返回應用程式
   scope:
     user:
       read: 登錄並讀取您的個人資料

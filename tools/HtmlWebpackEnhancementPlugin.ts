@@ -1,70 +1,53 @@
-import { promises as fs } from 'fs'
-import * as path from 'path'
-import HtmlWebpackPlugin from 'html-webpack-plugin'
+import { promises as fs } from 'node:fs'
+import * as path from 'node:path'
 import type { Compiler } from 'webpack'
 
+const plugin = 'HtmlWebpackEnhancementPlugin'
+const styles = new Set(['style', 'home-css', 'spectre'])
+
 class HtmlWebpackEnhancementPlugin {
+  private readonly root: string
+
+  constructor(root: string) {
+    this.root = root
+  }
+
   apply(compiler: Compiler) {
-    compiler.hooks.assetEmitted.tapPromise(
-      'HtmlWebpackEnhancementPlugin',
-      async (name, { source }) => {
-        if (name.endsWith('.twig')) {
-          const filePath = path.resolve(
-            process.cwd(),
-            'resources',
-            'views',
-            'assets',
-            name,
-          )
+    // Package the static routes with exactly the same build as the hashed assets.
+    compiler.hooks.thisCompilation.tap(plugin, (compilation) => {
+      compilation.hooks.processAssets.tapPromise(
+        { name: plugin, stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL },
+        async () => {
+          for (const name of ['bg.webp', 'favicon.ico']) {
+            const source = path.join(this.root, 'resources/assets/src/images', name)
+            compilation.fileDependencies.add(source)
+            compilation.emitAsset(
+              name,
+              new compiler.webpack.sources.RawSource(await fs.readFile(source)),
+            )
+          }
+        },
+      )
+    })
 
-          await fs.writeFile(filePath, source.source())
-        }
-      },
-    )
-
-    compiler.hooks.compilation.tap(
-      'HtmlWebpackEnhancementPlugin',
-      (compilation) => {
-        const hooks = HtmlWebpackPlugin.getHooks(compilation)
-
-        hooks.alterAssetTags.tap('HtmlWebpackEnhancementPlugin', (data) => {
-          data.assetTags.scripts = data.assetTags.scripts.map((tag) => {
-            tag.attributes.crossorigin = 'anonymous'
-            return tag
+    compiler.hooks.afterEmit.tapPromise(plugin, async (compilation) => {
+      const directory = path.join(this.root, 'resources/views/assets')
+      await fs.mkdir(directory, { recursive: true })
+      for (const [name, entry] of compilation.entrypoints) {
+        const suffix = styles.has(name) ? '.css' : '.js'
+        const html = entry
+          .getFiles()
+          .filter((file) => file.endsWith(suffix))
+          .map((file) => {
+            const url = `{{ url('/app') }}/${file}`
+            return styles.has(name)
+              ? `<link rel="stylesheet" href="${url}">`
+              : `<script defer src="${url}"></script>`
           })
-          data.assetTags.styles = data.assetTags.styles.map((tag) => {
-            tag.attributes.crossorigin = 'anonymous'
-            return tag
-          })
-
-          return data
-        })
-
-        hooks.afterTemplateExecution.tap(
-          'HtmlWebpackEnhancementPlugin',
-          (data) => {
-            if (
-              compilation.compiler.options.mode === 'production' &&
-              data.headTags.length > 0
-            ) {
-              if (
-                data.headTags.some((tag) => tag.attributes.rel === 'stylesheet')
-              ) {
-                data.bodyTags = data.headTags.filter(
-                  (tag) => tag.tagName !== 'script',
-                )
-              } else {
-                data.bodyTags = data.headTags
-              }
-
-              data.headTags = []
-            }
-
-            return data
-          },
-        )
-      },
-    )
+          .join('\n')
+        await fs.writeFile(path.join(directory, `${name}.twig`), `${html}\n`)
+      }
+    })
   }
 }
 

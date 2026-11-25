@@ -59,14 +59,14 @@ const Modal: React.FC<ModalOptions & Props> = (props) => {
   const [validatorMessage, setValidatorMessage] = useState('')
   const ref = useRef<HTMLDivElement>(null)
 
-  const { show } = props
+  const { show, onClose } = props
 
   useEffect(() => {
     if (!show) {
       return
     }
 
-    const onHidden = () => props.onClose?.()
+    const onHidden = () => onClose?.()
 
     const el = $(ref.current!)
     el.on('hidden.bs.modal', onHidden)
@@ -74,7 +74,7 @@ const Modal: React.FC<ModalOptions & Props> = (props) => {
     return () => {
       el.off('hidden.bs.modal', onHidden)
     }
-  }, [show, props.onClose])
+  }, [show, onClose])
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setValue(event.target.value)
@@ -112,8 +112,10 @@ const Modal: React.FC<ModalOptions & Props> = (props) => {
   }
 
   useEffect(() => {
-    if (show) {
-      setTimeout(() => $(ref.current!).modal('show'), 50)
+    if (show && ref.current) {
+      const element = ref.current
+      const timer = setTimeout(() => $(element).modal('show'), 50)
+      return () => clearTimeout(timer)
     }
   }, [show])
 
@@ -131,7 +133,6 @@ const Modal: React.FC<ModalOptions & Props> = (props) => {
           <ModalHeader show={showHeader} title={title} onDismiss={dismiss} />
           <ModalBody
             text={text}
-            dangerousHTML={props.dangerousHTML}
             showInput={mode === 'prompt'}
             value={value}
             choices={props.choices}

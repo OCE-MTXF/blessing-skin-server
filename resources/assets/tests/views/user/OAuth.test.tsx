@@ -7,12 +7,12 @@ import type { App } from '@/views/user/OAuth/types'
 
 jest.mock('@/scripts/net')
 
-const fixture: Readonly<App> = Object.freeze({
-  id: 1,
+const redirect = 'https://url.test/callback'
+const fixture = Object.freeze({
+  id: 42,
   name: 'My App',
-  redirect: 'http://url.test/',
-  secret: 'abc',
-})
+  redirect_uris: [redirect],
+} satisfies App)
 
 test('loading data', () => {
   fetch.get.mockResolvedValue([])
@@ -26,28 +26,28 @@ describe('create app', () => {
   })
 
   it('succeeded', async () => {
-    fetch.post.mockResolvedValue(fixture)
+    fetch.post.mockResolvedValue({ ...fixture, plain_secret: 'one-time-secret' })
     const { getByLabelText, getByText, queryByText } = render(<OAuth />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.oauth.create')))
     fireEvent.input(getByLabelText(t('user.oauth.name')), {
       target: { value: 'My App' },
     })
     fireEvent.input(getByLabelText(t('user.oauth.redirect')), {
-      target: { value: 'http://url.test/' },
+      target: { value: redirect },
     })
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith('/oauth/clients', {
+      expect(fetch.post).toHaveBeenCalledWith('/oauth/clients', {
         name: 'My App',
-        redirect: 'http://url.test/',
+        redirect,
       }),
     )
     expect(queryByText(fixture.id.toString())).toBeInTheDocument()
     expect(queryByText(fixture.name)).toBeInTheDocument()
-    expect(queryByText(fixture.redirect)).toBeInTheDocument()
-    expect(queryByText(fixture.secret)).toBeInTheDocument()
+    expect(queryByText(redirect)).toBeInTheDocument()
+    expect(queryByText('one-time-secret')).toBeInTheDocument()
   })
 
   it('failed', async () => {
@@ -55,42 +55,42 @@ describe('create app', () => {
     const { getByLabelText, getByText, getByRole, queryByText } = render(
       <OAuth />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.oauth.create')))
     fireEvent.input(getByLabelText(t('user.oauth.name')), {
       target: { value: 'My App' },
     })
     fireEvent.input(getByLabelText(t('user.oauth.redirect')), {
-      target: { value: 'http://url.test/' },
+      target: { value: redirect },
     })
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith('/oauth/clients', {
+      expect(fetch.post).toHaveBeenCalledWith('/oauth/clients', {
         name: 'My App',
-        redirect: 'http://url.test/',
+        redirect,
       }),
     )
     expect(queryByText(fixture.name)).not.toBeInTheDocument()
-    expect(queryByText(fixture.redirect)).not.toBeInTheDocument()
+    expect(queryByText(redirect)).not.toBeInTheDocument()
     expect(queryByText('exception')).toBeInTheDocument()
     expect(getByRole('alert')).toHaveClass('alert-danger')
   })
 
   it('cancel dialog', async () => {
     const { getByLabelText, getByText } = render(<OAuth />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.oauth.create')))
     fireEvent.input(getByLabelText(t('user.oauth.name')), {
       target: { value: 'My App' },
     })
     fireEvent.input(getByLabelText(t('user.oauth.redirect')), {
-      target: { value: 'http://url.test/' },
+      target: { value: redirect },
     })
     fireEvent.click(getByText(t('general.cancel')))
 
-    await waitFor(() => expect(fetch.post).not.toBeCalled())
+    await waitFor(() => expect(fetch.post).not.toHaveBeenCalled())
 
     fireEvent.click(getByText(t('user.oauth.create')))
     expect(getByLabelText(t('user.oauth.name'))).toHaveValue('')
@@ -110,7 +110,7 @@ describe('edit app', () => {
       const { getByTitle, getByText, getByDisplayValue, queryByText } = render(
         <OAuth />,
       )
-      await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+      await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
       fireEvent.click(getByTitle(t('user.oauth.modifyName')))
       fireEvent.input(getByDisplayValue(fixture.name), {
@@ -118,9 +118,9 @@ describe('edit app', () => {
       })
       fireEvent.click(getByText(t('general.confirm')))
       await waitFor(() =>
-        expect(fetch.put).toBeCalledWith(`/oauth/clients/${fixture.id}`, {
-          ...fixture,
+        expect(fetch.put).toHaveBeenCalledWith(`/oauth/clients/${fixture.id}`, {
           name: 'new name',
+          redirect,
         }),
       )
       expect(queryByText('new name')).toBeInTheDocument()
@@ -136,7 +136,7 @@ describe('edit app', () => {
         getByRole,
         queryByText,
       } = render(<OAuth />)
-      await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+      await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
       fireEvent.click(getByTitle(t('user.oauth.modifyName')))
       fireEvent.input(getByDisplayValue(fixture.name), {
@@ -144,9 +144,9 @@ describe('edit app', () => {
       })
       fireEvent.click(getByText(t('general.confirm')))
       await waitFor(() =>
-        expect(fetch.put).toBeCalledWith(`/oauth/clients/${fixture.id}`, {
-          ...fixture,
+        expect(fetch.put).toHaveBeenCalledWith(`/oauth/clients/${fixture.id}`, {
           name: 'new name',
+          redirect,
         }),
       )
       expect(queryByText(fixture.name)).toBeInTheDocument()
@@ -156,36 +156,36 @@ describe('edit app', () => {
 
     it('cancel dialog', async () => {
       const { getByTitle, getByText, queryByText } = render(<OAuth />)
-      await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+      await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
       fireEvent.click(getByTitle(t('user.oauth.modifyName')))
       fireEvent.click(getByText(t('general.cancel')))
-      await waitFor(() => expect(fetch.put).not.toBeCalled())
+      await waitFor(() => expect(fetch.put).not.toHaveBeenCalled())
       expect(queryByText(fixture.name)).toBeInTheDocument()
     })
   })
 
   describe('edit redirect url', () => {
     it('succeeded', async () => {
-      fetch.put.mockResolvedValue({ ...fixture, redirect: 'http://new.test/' })
+      fetch.put.mockResolvedValue({ ...fixture, redirect_uris: ['https://new.test/callback'] })
 
       const { getByTitle, getByDisplayValue, getByText, queryByText } = render(
         <OAuth />,
       )
-      await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+      await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
       fireEvent.click(getByTitle(t('user.oauth.modifyUrl')))
-      fireEvent.input(getByDisplayValue(fixture.redirect), {
-        target: { value: 'http://new.test/' },
+      fireEvent.input(getByDisplayValue(redirect), {
+        target: { value: 'https://new.test/callback' },
       })
       fireEvent.click(getByText(t('general.confirm')))
       await waitFor(() =>
-        expect(fetch.put).toBeCalledWith(`/oauth/clients/${fixture.id}`, {
-          ...fixture,
-          redirect: 'http://new.test/',
+        expect(fetch.put).toHaveBeenCalledWith(`/oauth/clients/${fixture.id}`, {
+          name: fixture.name,
+          redirect: 'https://new.test/callback',
         }),
       )
-      expect(queryByText('http://new.test/')).toBeInTheDocument()
+      expect(queryByText('https://new.test/callback')).toBeInTheDocument()
     })
 
     it('failed', async () => {
@@ -198,32 +198,32 @@ describe('edit app', () => {
         getByRole,
         queryByText,
       } = render(<OAuth />)
-      await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+      await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
       fireEvent.click(getByTitle(t('user.oauth.modifyUrl')))
-      fireEvent.input(getByDisplayValue(fixture.redirect), {
-        target: { value: 'http://new.test/' },
+      fireEvent.input(getByDisplayValue(redirect), {
+        target: { value: 'https://new.test/callback' },
       })
       fireEvent.click(getByText(t('general.confirm')))
       await waitFor(() =>
-        expect(fetch.put).toBeCalledWith(`/oauth/clients/${fixture.id}`, {
-          ...fixture,
-          redirect: 'http://new.test/',
+        expect(fetch.put).toHaveBeenCalledWith(`/oauth/clients/${fixture.id}`, {
+          name: fixture.name,
+          redirect: 'https://new.test/callback',
         }),
       )
-      expect(queryByText(fixture.redirect)).toBeInTheDocument()
+      expect(queryByText(redirect)).toBeInTheDocument()
       expect(queryByText('exception')).toBeInTheDocument()
       expect(getByRole('alert')).toHaveClass('alert-danger')
     })
 
     it('cancel dialog', async () => {
       const { getByTitle, getByText, queryByText } = render(<OAuth />)
-      await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+      await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
       fireEvent.click(getByTitle(t('user.oauth.modifyUrl')))
       fireEvent.click(getByText(t('general.cancel')))
-      await waitFor(() => expect(fetch.put).not.toBeCalled())
-      expect(queryByText(fixture.redirect)).toBeInTheDocument()
+      await waitFor(() => expect(fetch.put).not.toHaveBeenCalled())
+      expect(queryByText(redirect)).toBeInTheDocument()
     })
   })
 })
@@ -233,27 +233,28 @@ describe('delete app', () => {
     fetch.get.mockResolvedValue([fixture])
   })
 
-  it('succeeded', async () => {
+  it('succeeded on an empty 204 response', async () => {
+    fetch.del.mockResolvedValue('')
     const { getByText, queryByText } = render(<OAuth />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('report.delete')))
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(`/oauth/clients/${fixture.id}`),
+      expect(fetch.del).toHaveBeenCalledWith(`/oauth/clients/${fixture.id}`),
     )
     expect(queryByText(fixture.name)).not.toBeInTheDocument()
-    expect(queryByText(fixture.redirect)).not.toBeInTheDocument()
+    expect(queryByText(redirect)).not.toBeInTheDocument()
   })
 
   it('cancel dialog', async () => {
     const { getByText, queryByText } = render(<OAuth />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('report.delete')))
     fireEvent.click(getByText(t('general.cancel')))
-    await waitFor(() => expect(fetch.del).not.toBeCalled())
+    await waitFor(() => expect(fetch.del).not.toHaveBeenCalled())
     expect(queryByText(fixture.name)).toBeInTheDocument()
-    expect(queryByText(fixture.redirect)).toBeInTheDocument()
+    expect(queryByText(redirect)).toBeInTheDocument()
   })
 })

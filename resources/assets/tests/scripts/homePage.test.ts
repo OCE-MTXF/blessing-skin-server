@@ -14,7 +14,7 @@ describe('scroll handler', () => {
     window.dispatchEvent(new Event('scroll'))
     expect(
       document.querySelector('nav')!.classList.contains('transparent'),
-    ).toBeTrue()
+    ).toBe(true)
   })
 
   it('should not be transparent at bottom', () => {
@@ -24,6 +24,6 @@ describe('scroll handler', () => {
     window.dispatchEvent(new Event('scroll'))
     expect(
       document.querySelector('nav')!.classList.contains('transparent'),
-    ).toBeFalse()
+    ).toBe(false)
   })
 })

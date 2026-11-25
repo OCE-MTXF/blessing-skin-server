@@ -1,40 +1,37 @@
-name: Release
+name: Build release candidate (no publish)
 
 on:
-  push:
-    tags:
-      - '*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  archive:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Build and create archive
-        run: ./tools/release.ps1
-        shell: pwsh
-        env:
-          AZURE_TOKEN: ${{ secrets.AZURE_TOKEN }}
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout the selected tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-      - name: Get version
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
-      - name: Upload release asset
-        id: upload_release_asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+      - name: Build the pinned archive toolchain
+        run: docker build --target toolchain --tag blessing-ci:release-builder .
+      - name: Build archive and local SHA-256 manifest
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Select a reviewed numeric release tag.' >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/blessing-output"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" --volume "$RUNNER_TEMP/blessing-output:/output" \
+            blessing-ci:release-builder php ./tools/release.php build /workspace /output "$GITHUB_REF_NAME" /usr/local/bin/composer
+          cp "$RUNNER_TEMP/blessing-output"/blessing-skin-server-*.zip* "$GITHUB_WORKSPACE/"
+      - name: Attach workflow artifact for review (not a release)
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./blessing-skin-server-${{ steps.get_version.outputs.VERSION }}.zip
-          asset_name: blessing-skin-server-${{ steps.get_version.outputs.VERSION }}.zip
-          asset_content_type: application/zip
+          name: blessing-reviewed-candidate
+          path: |
+            blessing-skin-server-*.zip
+            blessing-skin-server-*.zip.sha256
+          if-no-files-found: error
+          retention-days: 7

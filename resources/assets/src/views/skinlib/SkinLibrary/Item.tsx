@@ -71,7 +71,11 @@ const Item: React.FC<Props> = (props) => {
 
   const handleHeartClick = (event: React.MouseEvent) => {
     event.preventDefault()
-    props.liked ? props.onRemove(item) : props.onAdd(item)
+    if (props.liked) {
+      void props.onRemove(item)
+    } else {
+      void props.onAdd(item)
+    }
   }
 
   return (

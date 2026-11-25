@@ -11,8 +11,8 @@ test('log out', async () => {
   post.mockResolvedValue({ message: '' })
 
   await logout()
-  expect(post).not.toBeCalled()
+  expect(post).not.toHaveBeenCalled()
 
   await logout()
-  expect(post).toBeCalledWith(urls.auth.logout())
+  expect(post).toHaveBeenCalledWith(urls.auth.logout())
 })

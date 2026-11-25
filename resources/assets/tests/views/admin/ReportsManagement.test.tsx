@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, waitFor, fireEvent } from '@testing-library/react'
+import { SkinViewer } from 'skinview3d'
 import { createPaginator } from '../../utils'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
@@ -8,6 +9,8 @@ import ReportsManagement from '@/views/admin/ReportsManagement'
 import { Report, Status } from '@/views/admin/ReportsManagement/types'
 
 jest.mock('@/scripts/net')
+
+afterEach(() => jest.restoreAllMocks())
 
 const fixture: Readonly<Report> = Object.freeze<Report>({
   id: 1,
@@ -53,7 +56,7 @@ test('search reports', async () => {
 
   const { getByTitle, getByText } = render(<ReportsManagement />)
   await waitFor(() =>
-    expect(fetch.get).toBeCalledWith('/admin/reports/list', {
+    expect(fetch.get).toHaveBeenCalledWith('/admin/reports/list', {
       q: 'status:0 sort:-report_at',
       page: 1,
     }),
@@ -64,7 +67,7 @@ test('search reports', async () => {
   })
   fireEvent.click(getByText(t('vendor.datatable.search')))
   await waitFor(() =>
-    expect(fetch.get).toBeCalledWith('/admin/reports/list', {
+    expect(fetch.get).toHaveBeenCalledWith('/admin/reports/list', {
       q: 's',
       page: 1,
     }),
@@ -78,7 +81,8 @@ test('empty reporter or texture uploader', () => {
   render(<ReportsManagement />)
 })
 
-test('preview texture', async () => {
+test('staff can preview a private reported texture by ID', async () => {
+  const loadCape = jest.spyOn(SkinViewer.prototype, 'loadCape')
   const texture: Texture = {
     tid: fixture.tid,
     name: 'cape',
@@ -86,16 +90,22 @@ test('preview texture', async () => {
     hash: 'def',
     size: 2,
     uploader: fixture.uploader,
-    public: true,
+    public: false,
     upload_at: new Date().toString(),
     likes: 1,
   }
   fetch.get.mockResolvedValue(createPaginator([{ ...fixture, texture }]))
 
-  const { getByAltText } = render(<ReportsManagement />)
-  await waitFor(() => expect(fetch.get).toBeCalled())
-
-  fireEvent.click(getByAltText(fixture.tid.toString()))
+  const { findByAltText } = render(<ReportsManagement />)
+  const thumbnail = await findByAltText(fixture.tid.toString())
+  expect(thumbnail).toHaveAttribute(
+    'src',
+    `/preview/${texture.tid}?height=150&png`,
+  )
+  fireEvent.click(thumbnail)
+  await waitFor(() =>
+    expect(loadCape).toHaveBeenCalledWith(`/asset/${texture.tid}`),
+  )
 })
 
 describe('proceed report', () => {
@@ -114,11 +124,11 @@ describe('proceed report', () => {
       const { getByText, getByRole, queryByText } = render(
         <ReportsManagement />,
       )
-      await waitFor(() => expect(fetch.get).toBeCalled())
+      await waitFor(() => expect(fetch.get).toHaveBeenCalled())
 
       fireEvent.click(getByText(t('report.ban')))
       await waitFor(() =>
-        expect(fetch.put).toBeCalledWith(`/admin/reports/${fixture.id}`, {
+        expect(fetch.put).toHaveBeenCalledWith(`/admin/reports/${fixture.id}`, {
           action: 'ban',
         }),
       )
@@ -133,11 +143,11 @@ describe('proceed report', () => {
       const { getByText, getByRole, queryByText } = render(
         <ReportsManagement />,
       )
-      await waitFor(() => expect(fetch.get).toBeCalled())
+      await waitFor(() => expect(fetch.get).toHaveBeenCalled())
 
       fireEvent.click(getByText(t('report.ban')))
       await waitFor(() =>
-        expect(fetch.put).toBeCalledWith(`/admin/reports/${fixture.id}`, {
+        expect(fetch.put).toHaveBeenCalledWith(`/admin/reports/${fixture.id}`, {
           action: 'ban',
         }),
       )
@@ -150,11 +160,11 @@ describe('proceed report', () => {
   describe('delete texture', () => {
     it('cancelled', async () => {
       const { getByText } = render(<ReportsManagement />)
-      await waitFor(() => expect(fetch.get).toBeCalled())
+      await waitFor(() => expect(fetch.get).toHaveBeenCalled())
 
       fireEvent.click(getByText(t('skinlib.show.delete-texture')))
       fireEvent.click(getByText(t('general.cancel')))
-      expect(fetch.put).not.toBeCalled()
+      expect(fetch.put).not.toHaveBeenCalled()
     })
 
     it('succeeded', async () => {
@@ -167,12 +177,12 @@ describe('proceed report', () => {
       const { getByText, getByRole, queryByText } = render(
         <ReportsManagement />,
       )
-      await waitFor(() => expect(fetch.get).toBeCalled())
+      await waitFor(() => expect(fetch.get).toHaveBeenCalled())
 
       fireEvent.click(getByText(t('skinlib.show.delete-texture')))
       fireEvent.click(getByText(t('general.confirm')))
       await waitFor(() =>
-        expect(fetch.put).toBeCalledWith(`/admin/reports/${fixture.id}`, {
+        expect(fetch.put).toHaveBeenCalledWith(`/admin/reports/${fixture.id}`, {
           action: 'delete',
         }),
       )
@@ -190,11 +200,11 @@ describe('proceed report', () => {
     })
 
     const { getByText, getByRole, queryByText } = render(<ReportsManagement />)
-    await waitFor(() => expect(fetch.get).toBeCalled())
+    await waitFor(() => expect(fetch.get).toHaveBeenCalled())
 
     fireEvent.click(getByText(t('report.reject')))
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(`/admin/reports/${fixture.id}`, {
+      expect(fetch.put).toHaveBeenCalledWith(`/admin/reports/${fixture.id}`, {
         action: 'reject',
       }),
     )

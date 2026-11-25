@@ -21,8 +21,7 @@ class CheckUserVerifiedTest extends TestCase
         option(['require_verification' => true]);
         $this->actingAs($unverified)
             ->get('/skinlib/upload')
-            ->assertStatus(403)
-            ->assertSee(trans('auth.check.verified'));
+            ->assertForbidden();
 
         $this->actingAs(User::factory()->create())
             ->get('/skinlib/upload')

@@ -14,6 +14,6 @@
 
 {% block before_foot %}
   <script id="blessing-extra" type="application/json">
-    {{ extra|json_encode|raw }}
+    {{ extra|json_encode(15)|raw }}
   </script>
 {% endblock %}

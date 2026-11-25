@@ -9,7 +9,7 @@
         {% if fixed_bg %}
           background-color: rgba(0, 0, 0, 0);
         {% else %}
-          background-image: url('{{ home_pic_url }}');
+          background-image: url('{{ home_pic_url|e('css') }}');
         {% endif %}
       }
     </style>
@@ -19,7 +19,7 @@
   <body class="hold-transition layout-top-nav">
     <div class="hp-wrapper">
       {% if fixed_bg %}
-        <div id="fixed-bg" style="background-image: url('{{ home_pic_url }}')"></div>
+        <div id="fixed-bg" style="background-image: url('{{ home_pic_url|e('css') }}')"></div>
       {% endif %}
 
       <nav class="navbar navbar-expand fixed-top navbar-{{ navbar_color }} navbar-{{ color_mode }}
@@ -95,7 +95,7 @@
                   <div class="col-lg">
                     <i class="fas {{ trans("index.features.#{item}.icon") }} mb-3" aria-hidden="true"></i>
                     <h3>{{ trans("index.features.#{item}.name") }}</h3>
-                    <p>{{ trans("index.features.#{item}.desc")|raw }}</p>
+                    <p>{{ trans("index.features.#{item}.desc") }}</p>
                   </div>
                 {% endfor %}
               </div>
@@ -127,7 +127,7 @@
     {% endif %}
 
     <script type="application/json" id="blessing-extra">
-      {{ {transparent_navbar: transparent_navbar}|json_encode|raw }}
+      {{ {transparent_navbar: transparent_navbar}|json_encode(15)|raw }}
     </script>
     {{ include('assets.home', ignore_missing = true) }}
     {{ include('shared.foot') }}

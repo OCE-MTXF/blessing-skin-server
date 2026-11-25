@@ -1,22 +1,29 @@
 import { useState, useEffect, useRef } from 'react'
-import TWEEN from '@tweenjs/tween.js'
+import { Tween } from '@tweenjs/tween.js'
 
-export default function useTween<T = any>(initialValue: T) {
-  const [value, setValue] = useState<T>(initialValue)
-  const ref = useRef<T>(value)
-  const [dest, setDest] = useState<T>(initialValue)
+export default function useTween(initialValue: number) {
+  const [value, setValue] = useState(initialValue)
+  const current = useRef({ value: initialValue })
+  const [destination, setDestination] = useState(initialValue)
 
   useEffect(() => {
-    function animate() {
-      requestAnimationFrame(animate)
-      TWEEN.update()
-      setValue(ref.current)
+    if (current.current.value === destination) return
+
+    const tween = new Tween(current.current)
+      .to({ value: destination }, 1000)
+      .start()
+    let frame = requestAnimationFrame(animate)
+    function animate(time: number) {
+      const playing = tween.update(time)
+      setValue(current.current.value)
+      if (playing) frame = requestAnimationFrame(animate)
     }
 
-    const tween = new TWEEN.Tween(ref)
-    tween.to({ current: dest }, 1000).start()
-    animate()
-  }, [dest])
+    return () => {
+      cancelAnimationFrame(frame)
+      tween.stop()
+    }
+  }, [destination])
 
-  return [value, setDest] as const
+  return [value, setDestination] as const
 }

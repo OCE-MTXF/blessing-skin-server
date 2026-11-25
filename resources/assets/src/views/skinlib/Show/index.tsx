@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { hot } from 'react-hot-loader/root'
 import Skeleton from 'react-loading-skeleton'
 import useBlessingExtra from '@/scripts/hooks/useBlessingExtra'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
@@ -8,6 +7,7 @@ import useMount from '@/scripts/hooks/useMount'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
 import { showModal, toast } from '@/scripts/notify'
+import textureAssetUrl from '@/scripts/textureAssetUrl'
 import { Texture, TextureType } from '@/scripts/types'
 import urls from '@/scripts/urls'
 import ButtonEdit from '@/components/ButtonEdit'
@@ -28,6 +28,7 @@ const Show: React.FC = () => {
   const [texture, setTexture] = useState<Texture>({} as Texture)
   const [isLoading, setIsLoading] = useState(true)
   const [showModalApply, setShowModalApply] = useState(false)
+  const [isChangingPrivacy, setIsChangingPrivacy] = useState(false)
   const [liked, setLiked] = useState(false)
   const nickname = useBlessingExtra<string>('nickname')
   const isUploaderExists = useBlessingExtra<boolean>('uploaderExists')
@@ -134,7 +135,7 @@ const Show: React.FC = () => {
     }
   }
 
-  const handleSetAsAvatar = () => setAsAvatar(texture.tid)
+  const handleSetAsAvatar = () => setAsAvatar(texture)
 
   const handleDownloadClick = () => {
     const a = document.createElement('a')
@@ -180,42 +181,56 @@ const Show: React.FC = () => {
     }
   }
 
+  const isOwner = currentUid > 0 && currentUid === texture.uploader
+  const canEdit = !isLoading && (isOwner || isAdmin)
+  const canChangePrivacy = canEdit && (isOwner || texture.public)
+
   const handlePrivacyClick = async () => {
+    if (!canChangePrivacy || isChangingPrivacy) return
+
+    const makePublic = !texture.public
+    setIsChangingPrivacy(true)
     try {
-      await showModal({
-        text: texture.public
-          ? t('skinlib.setPrivateNotice')
-          : t('skinlib.setPublicNotice'),
-      })
-    } catch {
-      return
-    }
-
-    type Ok = { code: 0; message: string }
-    type Err = { code: 1; message: string }
-    type Duplicated = { code: 2; message: string; data: { tid: number } }
-
-    const resp = await fetch.put<Ok | Err | Duplicated>(
-      urls.texture.privacy(texture.tid),
-    )
-    const { code, message } = resp
-    if (code === 0) {
-      toast.success(message)
-      setTexture((texture) => ({ ...texture, public: !texture.public }))
-    } else if (resp.code === 2) {
       try {
         await showModal({
-          mode: 'confirm',
-          text: message,
-          okButtonText: t('user.viewInSkinlib'),
+          text: makePublic
+            ? t('skinlib.setPublicNotice')
+            : t('skinlib.setPrivateNotice'),
         })
-        window.location.href =
-          blessing.base_url + urls.skinlib.show(resp.data.tid)
       } catch {
-        //
+        return
       }
-    } else {
-      toast.error(message)
+
+      type Ok = { code: 0; message: string }
+      type Err = { code: 1; message: string }
+      type Duplicated = { code: 2; message: string; data: { tid: number } }
+
+      const resp = await fetch.put<Ok | Err | Duplicated>(
+        urls.texture.privacy(texture.tid),
+        { public: makePublic },
+      )
+      const { code, message } = resp
+      if (code === 0) {
+        toast.success(message)
+        setTexture((texture) => ({ ...texture, public: makePublic }))
+        setShowModalApply(false)
+      } else if (resp.code === 2) {
+        try {
+          await showModal({
+            mode: 'confirm',
+            text: message,
+            okButtonText: t('user.viewInSkinlib'),
+          })
+          window.location.href =
+            blessing.base_url + urls.skinlib.show(resp.data.tid)
+        } catch {
+          // Duplicate can be left unpublished.
+        }
+      } else {
+        toast.error(message)
+      }
+    } finally {
+      setIsChangingPrivacy(false)
     }
   }
 
@@ -242,7 +257,11 @@ const Show: React.FC = () => {
     }
   }
 
-  const handleOpenModalApply = () => setShowModalApply(true)
+  const handleOpenModalApply = () => {
+    if (texture.public) {
+      setShowModalApply(true)
+    }
+  }
   const handleCloseModalApply = () => setShowModalApply(false)
 
   const linkToUploader = (() => {
@@ -256,10 +275,8 @@ const Show: React.FC = () => {
     return `${blessing.base_url}/skinlib?${search.toString()}`
   })()
 
-  const canEdit = currentUid === texture.uploader || isAdmin
-  const textureUrl = texture.hash
-    ? `${blessing.base_url}/textures/${texture.hash}`
-    : ''
+  const textureUrl = textureAssetUrl(texture.tid)
+  const isPrivate = !isLoading && !texture.public
 
   return (
     <>
@@ -285,7 +302,7 @@ const Show: React.FC = () => {
               ) : (
                 <div className="d-flex justify-content-between align-items-center">
                   <div>
-                    {liked && (
+                    {liked && texture.public && (
                       <button
                         className="btn btn-outline-success mr-2"
                         onClick={handleOpenModalApply}
@@ -308,7 +325,7 @@ const Show: React.FC = () => {
                         {t('skinlib.addToCloset')}
                       </button>
                     )}
-                    {texture.type !== TextureType.Cape && (
+                    {texture.public && texture.type !== TextureType.Cape && (
                       <button
                         className="btn btn-outline-info mr-2"
                         onClick={handleSetAsAvatar}
@@ -330,6 +347,11 @@ const Show: React.FC = () => {
                     >
                       {t('skinlib.report.title')}
                     </button>
+                    {isPrivate && (
+                      <p className="small text-muted mt-2 mb-0">
+                        {t('skinlib.publishToUse')}
+                      </p>
+                    )}
                   </div>
                   <div
                     className={liked ? 'text-red' : 'text-gray'}
@@ -458,11 +480,17 @@ const Show: React.FC = () => {
           </div>
           <div className="card-footer">
             <div className="container d-flex justify-content-between">
-              <button className="btn btn-warning" onClick={handlePrivacyClick}>
-                {texture.public
-                  ? t('skinlib.setAsPrivate')
-                  : t('skinlib.setAsPublic')}
-              </button>
+              {canChangePrivacy && (
+                <button
+                  className="btn btn-warning"
+                  disabled={isChangingPrivacy}
+                  onClick={handlePrivacyClick}
+                >
+                  {texture.public
+                    ? t('skinlib.setAsPrivate')
+                    : t('skinlib.setAsPublic')}
+                </button>
+              )}
               <button
                 className="btn btn-danger"
                 onClick={handleDeleteTextureClick}
@@ -474,16 +502,22 @@ const Show: React.FC = () => {
         </div>
       )}
       <ModalApply
-        show={showModalApply}
+        show={showModalApply && texture.public}
         canAdd={false}
-        {...{
-          [texture.type === TextureType.Cape ? TextureType.Cape : 'skin']:
-            texture.tid,
-        }}
+        skin={
+          texture.public && texture.type !== TextureType.Cape
+            ? texture.tid
+            : undefined
+        }
+        cape={
+          texture.public && texture.type === TextureType.Cape
+            ? texture.tid
+            : undefined
+        }
         onClose={handleCloseModalApply}
       />
     </>
   )
 }
 
-export default hot(Show)
+export default Show

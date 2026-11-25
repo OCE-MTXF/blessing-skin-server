@@ -7,6 +7,8 @@ use App\Models\Texture;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
+use Tests\Support\TextureFixtures;
 
 class PlayersManagementControllerTest extends TestCase
 {
@@ -70,10 +72,11 @@ class PlayersManagementControllerTest extends TestCase
             route('admin.players.name', ['player' => $player->pid])
         )->assertJsonValidationErrors(['player_name']);
 
-        // duplicated player name
+        // A different player's name is taken; retaining this player's current name is allowed.
+        $other = Player::factory()->create();
         $this->putJson(
             route('admin.players.name', ['player' => $player->pid]),
-            ['player_name' => $player->name]
+            ['player_name' => $other->name]
         )->assertJsonValidationErrors(['player_name']);
 
         // rename a player successfully
@@ -144,9 +147,9 @@ class PlayersManagementControllerTest extends TestCase
         );
         Event::assertNotDispatched('player.owner.updated');
 
-        // change owner successfully
+        // On transfer, neither slot carries over to the new owner's account.
         Event::fake();
-        /** @var User */
+        $player->update(['tid_skin' => 1, 'tid_cape' => 2]);
         $user = User::factory()->create();
         $this->putJson(
             route('admin.players.owner', ['player' => $player->pid]),
@@ -157,7 +160,10 @@ class PlayersManagementControllerTest extends TestCase
                 'admin.players.owner.success',
                 ['player' => $player->name, 'user' => $user->nickname]
             ),
+            'data' => ['tid_skin' => 0, 'tid_cape' => 0],
         ]);
+        $this->assertSame(0, $player->fresh()->tid_skin);
+        $this->assertSame(0, $player->fresh()->tid_cape);
         Event::assertDispatched(
             'player.owner.updating',
             function ($eventName, $payload) use ($player, $user) {
@@ -228,10 +234,10 @@ class PlayersManagementControllerTest extends TestCase
         );
         Event::assertNotDispatched('player.texture.updated');
 
-        /** @var Texture */
-        $skin = Texture::factory()->create();
-        /** @var Texture */
-        $cape = Texture::factory()->cape()->create();
+        Storage::fake('textures');
+        $skin = Texture::factory()->create(['hash' => TextureFixtures::put()]);
+        $cape = Texture::factory()->cape()->create(['hash' => TextureFixtures::put('webp', 64, 32)]);
+        $player->user->closet()->attach([$skin->tid, $cape->tid]);
 
         // skin
         Event::fake();

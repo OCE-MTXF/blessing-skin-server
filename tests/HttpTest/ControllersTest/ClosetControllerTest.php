@@ -7,6 +7,8 @@ use App\Models\User;
 use Blessing\Rejection;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
+use Tests\Support\TextureFixtures;
 
 class ClosetControllerTest extends TestCase
 {
@@ -23,6 +25,7 @@ class ClosetControllerTest extends TestCase
 
     public function testGetClosetData()
     {
+        $this->withoutExceptionHandling();
         $user = User::factory()->create();
         $textures = Texture::factory()->count(10)->create();
         $textures->each(function ($t) use ($user) {
@@ -73,8 +76,9 @@ class ClosetControllerTest extends TestCase
     {
         Event::fake();
         $user = User::factory()->create();
+        Storage::fake('textures');
         $uploader = User::factory()->create(['score' => 0]);
-        $texture = Texture::factory()->create(['uploader' => $uploader->uid]);
+        $texture = Texture::factory()->create(['uploader' => $uploader->uid, 'hash' => TextureFixtures::put()]);
         $likes = $texture->likes;
         $name = 'my';
         option(['score_per_closet_item' => 10]);
@@ -149,7 +153,7 @@ class ClosetControllerTest extends TestCase
         $user->save();
         $this->postJson(
             route('user.closet.add'),
-            ['tid' => -1, 'name' => 'my']
+            ['tid' => 9999, 'name' => 'my']
         )->assertJson([
             'code' => 1,
             'message' => trans('user.closet.add.not-found'),
@@ -169,17 +173,18 @@ class ClosetControllerTest extends TestCase
             'message' => trans('skinlib.show.private'),
         ]);
 
-        // administrator can add it.
+        // Staff may inspect a private texture, but only the uploader may keep it.
         $privateTexture = Texture::factory()->private()->create([
-            'uploader' => 0,
+            'uploader' => $uploader->uid,
+            'hash' => TextureFixtures::put('webp'),
         ]);
-        $this->actingAs(User::factory()->admin()->create())
+        $this->actingAs(User::factory()->admin()->create(['score' => 100]))
             ->postJson(
                 route('user.closet.add'),
                 ['tid' => $privateTexture->tid, 'name' => $name]
             )->assertJson([
-                'code' => 0,
-                'message' => trans('user.closet.add.success', ['name' => $name]),
+                'code' => 1,
+                'message' => trans('user.closet.add.not-found'),
             ]);
 
         // add a texture successfully
@@ -400,7 +405,7 @@ class ClosetControllerTest extends TestCase
         $score = $user->score;
         $this->deleteJson(route('user.closet.remove', ['tid' => $texture->tid]))
             ->assertJson(['code' => 0]);
-        $this->assertEquals($likes - 1, Texture::find($texture->tid)->likes);
+        $this->assertEquals(max(0, $likes - 1), Texture::find($texture->tid)->likes);
         $this->assertEquals($score, $user->score);
         $this->assertEquals(0, $user->closet()->count());
     }

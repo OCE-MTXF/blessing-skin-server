@@ -1,11 +1,9 @@
-export function getExtraData(): Record<string, any> {
-  const jsonElement = document.querySelector('#blessing-extra')
-  /* istanbul ignore next */
-  if (jsonElement) {
-    return JSON.parse(jsonElement.textContent ?? '{}')
-  } else {
-    return {}
-  }
+import { readJsonObject } from './init'
+
+export function getExtraData(): Record<string, unknown> {
+  return readJsonObject('blessing-extra')
 }
 
-blessing.extra = getExtraData()
+if (process.env.NODE_ENV !== 'test') {
+  blessing.extra = getExtraData()
+}

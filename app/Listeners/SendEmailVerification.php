@@ -2,23 +2,19 @@
 
 namespace App\Listeners;
 
-use App\Mail\EmailVerification;
 use App\Models\User;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\URL;
+use App\Services\Auth\AccountMail;
 
 class SendEmailVerification
 {
-    public function handle(User $user)
+    public function __construct(private AccountMail $mail)
+    {
+    }
+
+    public function handle(User $user): void
     {
         if (option('require_verification')) {
-            $url = URL::signedRoute('auth.verify', ['user' => $user->uid], null, false);
-
-            try {
-                Mail::to($user->email)->send(new EmailVerification(url($url)));
-            } catch (\Exception $e) {
-                report($e);
-            }
+            $this->mail->verification($user->uid, $user->account_version);
         }
     }
 }

@@ -16,6 +16,7 @@ const TexturePreview = styled.div`
 interface Props {
   skin: string
   cape: string
+  children?: React.ReactNode
 }
 
 const Viewer2d: React.FC<Props> = (props) => {

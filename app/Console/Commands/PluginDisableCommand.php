@@ -11,15 +11,16 @@ class PluginDisableCommand extends Command
 
     protected $description = 'Disable a plugin';
 
-    public function handle(PluginManager $plugins)
+    public function handle(PluginManager $plugins): int
     {
-        $plugin = $plugins->get($this->argument('name'));
-        if ($plugin) {
-            $plugins->disable($this->argument('name'));
-            $title = trans($plugin->title);
-            $this->info(trans('admin.plugins.operations.disabled', ['plugin' => $title]));
-        } else {
-            $this->warn(trans('admin.plugins.operations.not-found'));
+        $name = $this->argument('name');
+        if (!$plugins->disable($name)) {
+            $this->warn('Cannot disable this plugin: the plugin or installation readiness is missing.');
+
+            return self::FAILURE;
         }
+        $this->info(trans('admin.plugins.operations.disabled', ['plugin' => $name]));
+
+        return self::SUCCESS;
     }
 }

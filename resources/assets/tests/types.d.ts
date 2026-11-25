@@ -12,6 +12,9 @@ interface Window {
     locale: string
     site_name: string
     version: string
+    route: string
+    env: string
+    debug: boolean
     i18n: object
     extra: any
   }

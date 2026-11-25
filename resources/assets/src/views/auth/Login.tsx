@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { hot } from 'react-hot-loader/root'
-import useBlessingExtra from '@/scripts/hooks/useBlessingExtra'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
 import { t } from '@/scripts/i18n'
+import { localReturnUrl } from '@/scripts/init'
 import * as fetch from '@/scripts/net'
 import { showModal } from '@/scripts/notify'
 import urls from '@/scripts/urls'
@@ -18,7 +17,7 @@ type SuccessfulResponse = {
 type FailedResponse = {
   code: number
   message: string
-  data: { login_fails: number }
+  data?: { login_fails: number }
 }
 type Response = SuccessfulResponse | FailedResponse
 
@@ -36,8 +35,6 @@ const Login: React.FC = () => {
   const [isPending, setIsPending] = useState(false)
   const [warningMessage, setWarningMessage] = useState('')
   const ref = useRef<Captcha | null>(null)
-  const recaptcha = useBlessingExtra<string>('recaptcha')
-  const invisibleRecaptcha = useBlessingExtra<boolean>('invisible')
 
   useEmitMounted()
 
@@ -65,29 +62,19 @@ const Login: React.FC = () => {
     })
 
     if (isSuccessfulResponse(response)) {
-      window.location.href = response.data.redirectTo
+      window.location.href = localReturnUrl(response.data?.redirectTo)
     } else {
       setWarningMessage(response.message)
       setIsPending(false)
       ref.current?.reset()
 
       // only notify user if he/she fails too much at the first time
-      if (response.data.login_fails > 3 && !hasTooManyFails) {
+      if ((response.data?.login_fails ?? 0) > 3 && !hasTooManyFails) {
         setHasTooManyFails(true)
-        if (recaptcha) {
-          // no need to notify if using invisible recaptcha
-          if (!invisibleRecaptcha) {
-            showModal({
-              mode: 'alert',
-              text: t('auth.tooManyFails.recaptcha'),
-            })
-          }
-        } else {
-          showModal({
-            mode: 'alert',
-            text: t('auth.tooManyFails.captcha'),
-          })
-        }
+        void showModal({
+          mode: 'alert',
+          text: t('auth.tooManyFails.captcha'),
+        }).catch(() => undefined)
       }
     }
   }
@@ -154,4 +141,4 @@ const Login: React.FC = () => {
   )
 }
 
-export default hot(Login)
+export default Login

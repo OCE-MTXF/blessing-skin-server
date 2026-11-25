@@ -2,32 +2,38 @@
 
 namespace App\Models\Concerns;
 
-use App\Services\Cipher\BaseCipher;
+use App\Services\Auth\AccountSecurity;
+use App\Services\Auth\PasswordCipher;
 use Blessing\Filter;
+use SensitiveParameter;
 
 trait HasPassword
 {
-    public function verifyPassword(string $raw)
+    public function verifyPassword(#[SensitiveParameter] string $raw): bool
     {
-        /** @var BaseCipher */
-        $cipher = resolve('cipher');
-        /** @var Filter */
-        $filter = resolve(Filter::class);
-        $password = $this->password;
-        $user = $this;
+        $passed = app(PasswordCipher::class)->verify($raw, $this->password, config('secure.salt'));
+        $accepted = app(Filter::class)->apply('verify_password', $passed, [$raw, $this]);
 
-        $passed = $cipher->verify($raw, $password, config('secure.salt'));
-        $passed = $filter->apply('verify_password', $passed, [$raw, $user]);
-
-        return $passed;
+        // Preserve the hook, but do not use it as an alternate authentication path.
+        return $passed && (bool) $accepted;
     }
 
-    public function changePassword(string $password): bool
+    public function changePassword(#[SensitiveParameter] string $password): bool
     {
-        $password = resolve('cipher')->hash($password, config('secure.salt'));
-        $password = resolve(Filter::class)->apply('user_password', $password);
-        $this->password = $password;
+        $security = app(AccountSecurity::class);
+        if (!$this->exists) {
+            $this->password = $security->hashNewPassword($password);
 
-        return $this->save();
+            return $this->save();
+        }
+
+        $security->serialized(function () use ($security, $password) {
+            $user = $security->lockUser($this->uid);
+            $security->assertCurrent($this, $user);
+            $security->updatePassword($user, $password);
+            $this->setRawAttributes($user->getAttributes(), true);
+        });
+
+        return true;
     }
 }

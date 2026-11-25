@@ -5,14 +5,14 @@ import type { Texture } from '@/scripts/types'
 import urls from '@/scripts/urls'
 
 export default async function addClosetItem(
-  texture: Pick<Texture, 'tid' | 'name'>,
+  texture: Pick<Texture, 'tid' | 'name' | 'public'>,
 ): Promise<boolean> {
   let name: string
   try {
     const { value } = await showModal({
       mode: 'prompt',
       title: t('skinlib.setItemName'),
-      text: t('skinlib.applyNotice'),
+      text: t(texture.public ? 'skinlib.applyNotice' : 'skinlib.publishToUse'),
       input: texture.name,
       validator: (value: string) => {
         if (!value) {

@@ -1,34 +1,14 @@
-<IfModule mod_rewrite.c>
-    <IfModule mod_negotiation.c>
-        Options -MultiViews -Indexes
-    </IfModule>
-
-    RewriteEngine On
-
-    # You may need to uncomment the following line for some hosting environments,
-    # if you have installed to a subdirectory, enter the name here also.
-    #
-    # RewriteBase /
-
-    # Black list protected files
-    RewriteRule (^\.|/\.) - [F]
-    RewriteRule ^storage/.* - [F]
-
-    # Redirect trailing slashes if not a folder (behind a reverse proxy)
-    RewriteCond %{HTTP:X-Forwarded-Proto} ^https$
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI} (.+)/$
-    RewriteRule ^ "%{HTTP:X-Forwarded-Proto}://%{HTTP_HOST}%1" [L,R=301]
-    
-    # Redirect trailing slashes if not a folder
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI} (.+)/$
-    RewriteRule ^ %1 [L,R=301]
-
-    # Handle front controller
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^ index.php [L]
-</IfModule>
-
+# Optional only for independently configured Apache with public/ as DocumentRoot.
+# Missing mod_rewrite fails configuration instead of falling back to static serving.
+Options -Indexes -MultiViews
+DirectoryIndex disabled
+RewriteEngine On
+RewriteRule ^(?:setup|admin/update|plugins|lang|storage)(?:/|$) - [R=404,END,NC]
+RewriteRule ^\.well-known/change-password$ index.php [END]
+RewriteRule (^|/)\. - [R=404,END]
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^app/(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.(?:js|css|woff2?|ttf|eot|ico|png|webp|svg|wasm|jpe?g|gif|avif|js\.LICENSE\.txt)$ - [END]
+RewriteRule ^app(?:/|$) - [R=404,END,NC]
+RewriteRule ^index\.php$ - [END]
+RewriteRule ^ index.php [END]
 AddType application/wasm .wasm

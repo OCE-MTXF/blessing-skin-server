@@ -1,16 +1,11 @@
 import * as React from 'react'
 import * as ReactDOM from 'react-dom'
+import { createRoot } from 'react-dom/client'
 import $ from 'jquery'
 import './scripts/app'
 import routes from './scripts/route'
 
 Object.assign(window, { React, ReactDOM, $ })
-
-const entry = document.querySelector('[href="#launch-cli"]')
-entry?.addEventListener('click', async () => {
-  const { launch } = await import('./scripts/cli')
-  launch()
-})
 
 const route = routes.find((route) =>
   new RegExp(`^${route.path}$`, 'i').test(blessing.route),
@@ -30,8 +25,7 @@ if (route) {
         </React.Suspense>
       </React.StrictMode>
     )
-    const c =
-      typeof route.el === 'string' ? document.querySelector(route.el) : route.el
-    ReactDOM.render(<Root />, c)
+    const c = document.querySelector(route.el)
+    if (c) createRoot(c).render(<Root />)
   }
 }

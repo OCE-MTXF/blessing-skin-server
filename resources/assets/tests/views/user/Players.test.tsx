@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, fireEvent, waitFor } from '@testing-library/react'
+import { SkinViewer } from 'skinview3d'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
 import { Player, TextureType } from '@/scripts/types'
@@ -32,6 +33,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  jest.restoreAllMocks()
   document.querySelector('#previewer')!.remove()
 })
 
@@ -47,7 +49,7 @@ test('search players', async () => {
   fetch.get.mockResolvedValue([fixture, fixture2])
 
   const { getByPlaceholderText, queryByText } = render(<Players />)
-  await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+  await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
   fireEvent.input(getByPlaceholderText(t('user.typeToSearch')), {
     target: { value: 'k' },
@@ -58,16 +60,22 @@ test('search players', async () => {
 })
 
 describe('select player automatically', () => {
-  it('only one player', async () => {
+  it('uses player texture IDs and fetches only the skin model', async () => {
     fetch.get
       .mockResolvedValueOnce([fixture])
-      .mockResolvedValueOnce({ hash: '', type: TextureType.Steve })
-      .mockResolvedValueOnce({ hash: '', type: TextureType.Cape })
-    render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+      .mockResolvedValueOnce({ type: TextureType.Alex })
+    const loadSkin = jest.spyOn(SkinViewer.prototype, 'loadSkin')
+    const loadCape = jest.spyOn(SkinViewer.prototype, 'loadCape')
 
-    expect(fetch.get).toBeCalledWith(`/skinlib/info/${fixture.tid_skin}`)
-    expect(fetch.get).toBeCalledWith(`/skinlib/info/${fixture.tid_cape}`)
+    render(<Players />)
+    await waitFor(() =>
+      expect(loadSkin).toHaveBeenCalledWith(`/asset/${fixture.tid_skin}`, {
+        model: 'slim',
+      }),
+    )
+    expect(loadCape).toHaveBeenCalledWith(`/asset/${fixture.tid_cape}`)
+    expect(fetch.get).toHaveBeenCalledWith(urls.skinlib.info(fixture.tid_skin))
+    expect(fetch.get).not.toHaveBeenCalledWith(urls.skinlib.info(fixture.tid_cape))
   })
 
   it('more players', async () => {
@@ -81,10 +89,10 @@ describe('select player automatically', () => {
     }
     fetch.get.mockResolvedValue([fixture, fixture2])
     render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
-    expect(fetch.get).not.toBeCalledWith(`/skinlib/info/${fixture.tid_skin}`)
-    expect(fetch.get).not.toBeCalledWith(`/skinlib/info/${fixture.tid_cape}`)
+    expect(fetch.get).not.toHaveBeenCalledWith(`/skinlib/info/${fixture.tid_skin}`)
+    expect(fetch.get).not.toHaveBeenCalledWith(`/skinlib/info/${fixture.tid_cape}`)
   })
 })
 
@@ -92,59 +100,50 @@ describe('2d preview', () => {
   it('skin and cape', async () => {
     fetch.get
       .mockResolvedValueOnce([fixture])
-      .mockResolvedValueOnce({ hash: 'a', type: TextureType.Steve })
-      .mockResolvedValueOnce({ hash: 'b', type: TextureType.Cape })
+      .mockResolvedValueOnce({ type: TextureType.Steve })
 
-    const { getByAltText, getByText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    const { findByAltText, findByText } = render(<Players />)
+    fireEvent.click(await findByText(t('user.switch2dPreview')))
 
-    fireEvent.click(getByText(t('user.switch2dPreview')))
-
-    expect(getByAltText(t('general.skin'))).toHaveAttribute(
+    expect(await findByAltText(t('general.skin'))).toHaveAttribute(
       'src',
-      `${blessing.base_url}/textures/a`,
+      `/asset/${fixture.tid_skin}`,
     )
-    expect(getByAltText(t('general.cape'))).toHaveAttribute(
+    expect(await findByAltText(t('general.cape'))).toHaveAttribute(
       'src',
-      `${blessing.base_url}/textures/b`,
+      `/asset/${fixture.tid_cape}`,
     )
   })
 
   it('skin only', async () => {
     fetch.get
       .mockResolvedValueOnce([{ ...fixture, tid_cape: 0 }])
-      .mockResolvedValueOnce({ hash: 'a', type: TextureType.Steve })
+      .mockResolvedValueOnce({ type: TextureType.Steve })
 
-    const { getByAltText, queryByAltText, getByText, queryByText } = render(
+    const { findByAltText, queryByAltText, findByText, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    fireEvent.click(await findByText(t('user.switch2dPreview')))
 
-    fireEvent.click(getByText(t('user.switch2dPreview')))
-
-    expect(getByAltText(t('general.skin'))).toHaveAttribute(
+    expect(await findByAltText(t('general.skin'))).toHaveAttribute(
       'src',
-      `${blessing.base_url}/textures/a`,
+      `/asset/${fixture.tid_skin}`,
     )
     expect(queryByAltText(t('general.cape'))).not.toBeInTheDocument()
     expect(queryByText(t('user.player.texture-empty'))).toBeInTheDocument()
   })
 
   it('cape only', async () => {
-    fetch.get
-      .mockResolvedValueOnce([{ ...fixture, tid_skin: 0 }])
-      .mockResolvedValueOnce({ hash: 'a', type: TextureType.Cape })
+    fetch.get.mockResolvedValueOnce([{ ...fixture, tid_skin: 0 }])
 
-    const { getByAltText, queryByAltText, getByText, queryByText } = render(
+    const { findByAltText, queryByAltText, findByText, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    fireEvent.click(await findByText(t('user.switch2dPreview')))
 
-    fireEvent.click(getByText(t('user.switch2dPreview')))
-
-    expect(getByAltText(t('general.cape'))).toHaveAttribute(
+    expect(await findByAltText(t('general.cape'))).toHaveAttribute(
       'src',
-      `${blessing.base_url}/textures/a`,
+      `/asset/${fixture.tid_cape}`,
     )
     expect(queryByAltText(t('general.skin'))).not.toBeInTheDocument()
     expect(queryByText(t('user.player.texture-empty'))).toBeInTheDocument()
@@ -158,7 +157,7 @@ describe('create player', () => {
 
   it('alert if score is enough', async () => {
     const { getByRole, getByText, queryByText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.add-player')))
 
@@ -171,7 +170,7 @@ describe('create player', () => {
   it('alert if lack of score', async () => {
     blessing.extra.score = 0
     const { getByRole, getByText, queryByText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.add-player')))
 
@@ -187,7 +186,7 @@ describe('create player', () => {
     const { getByText, getByLabelText, getByRole, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.add-player')))
     fireEvent.input(getByLabelText(t('general.player.player-name')), {
@@ -195,7 +194,7 @@ describe('create player', () => {
     })
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.user.player.add(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.user.player.add(), {
         name: fixture.name,
       }),
     )
@@ -211,7 +210,7 @@ describe('create player', () => {
     const { getByText, getByLabelText, getByRole, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.add-player')))
     fireEvent.input(getByLabelText(t('general.player.player-name')), {
@@ -219,7 +218,7 @@ describe('create player', () => {
     })
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.user.player.add(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.user.player.add(), {
         name: fixture.name,
       }),
     )
@@ -230,20 +229,20 @@ describe('create player', () => {
 
   it('cancelled', async () => {
     const { getByText, getByLabelText, queryByText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.add-player')))
     fireEvent.input(getByLabelText(t('general.player.player-name')), {
       target: { value: fixture.name },
     })
     fireEvent.click(getByText(t('general.cancel')))
-    await waitFor(() => expect(fetch.post).not.toBeCalled())
+    await waitFor(() => expect(fetch.post).not.toHaveBeenCalled())
     expect(queryByText(fixture.name)).not.toBeInTheDocument()
   })
 
   it('clear form on close', async () => {
     const { getByText, getByLabelText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.add-player')))
     fireEvent.input(getByLabelText(t('general.player.player-name')), {
@@ -269,7 +268,7 @@ describe('edit player name', () => {
 
     const { getByText, getByTitle, getByDisplayValue, getByRole, queryByText } =
       render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByTitle(t('user.player.edit-pname')))
     fireEvent.input(getByDisplayValue(fixture.name), {
@@ -277,7 +276,7 @@ describe('edit player name', () => {
     })
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(urls.user.player.rename(fixture.pid), {
+      expect(fetch.put).toHaveBeenCalledWith(urls.user.player.rename(fixture.pid), {
         name: 'reina',
       }),
     )
@@ -290,14 +289,14 @@ describe('edit player name', () => {
     const { getByText, getByTitle, getByDisplayValue, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByTitle(t('user.player.edit-pname')))
     fireEvent.input(getByDisplayValue(fixture.name), {
       target: { value: '' },
     })
     fireEvent.click(getByText(t('general.confirm')))
-    await waitFor(() => expect(fetch.put).not.toBeCalled())
+    await waitFor(() => expect(fetch.put).not.toHaveBeenCalled())
     expect(queryByText(t('user.emptyPlayerName'))).toBeInTheDocument()
 
     fireEvent.click(getByText(t('general.cancel')))
@@ -309,7 +308,7 @@ describe('edit player name', () => {
 
     const { getByText, getByTitle, getByDisplayValue, getByRole, queryByText } =
       render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByTitle(t('user.player.edit-pname')))
     fireEvent.input(getByDisplayValue(fixture.name), {
@@ -317,7 +316,7 @@ describe('edit player name', () => {
     })
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.put).toBeCalledWith(urls.user.player.rename(fixture.pid), {
+      expect(fetch.put).toHaveBeenCalledWith(urls.user.player.rename(fixture.pid), {
         name: 'reina',
       }),
     )
@@ -341,14 +340,14 @@ describe('reset texture', () => {
     const { getByText, getByRole, getByLabelText, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-texture')))
     fireEvent.click(getByLabelText(t('general.skin')))
     fireEvent.click(getByLabelText(t('general.cape')))
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(
+      expect(fetch.del).toHaveBeenCalledWith(
         `${urls.user.player.clear(fixture.pid)}?skin=true&cape=true`,
       ),
     )
@@ -362,13 +361,13 @@ describe('reset texture', () => {
     const { getByText, getByRole, getByLabelText, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-texture')))
     fireEvent.click(getByLabelText(t('general.skin')))
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(
+      expect(fetch.del).toHaveBeenCalledWith(
         `${urls.user.player.clear(fixture.pid)}?skin=true`,
       ),
     )
@@ -382,13 +381,13 @@ describe('reset texture', () => {
     const { getByText, getByRole, getByLabelText, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-texture')))
     fireEvent.click(getByLabelText(t('general.cape')))
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(
+      expect(fetch.del).toHaveBeenCalledWith(
         `${urls.user.player.clear(fixture.pid)}?cape=true`,
       ),
     )
@@ -398,11 +397,11 @@ describe('reset texture', () => {
 
   it('select nothing', async () => {
     const { getByText, getByRole, queryByText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-texture')))
     fireEvent.click(getByText(t('general.confirm')))
-    await waitFor(() => expect(fetch.del).not.toBeCalled())
+    await waitFor(() => expect(fetch.del).not.toHaveBeenCalled())
     expect(queryByText(t('user.noClearChoice'))).toBeInTheDocument()
     expect(getByRole('alert')).toHaveClass('alert-warning')
   })
@@ -413,13 +412,13 @@ describe('reset texture', () => {
     const { getByText, getByRole, getByLabelText, queryByText } = render(
       <Players />,
     )
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-texture')))
     fireEvent.click(getByLabelText(t('general.skin')))
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(
+      expect(fetch.del).toHaveBeenCalledWith(
         `${urls.user.player.clear(fixture.pid)}?skin=true`,
       ),
     )
@@ -429,12 +428,12 @@ describe('reset texture', () => {
 
   it('cancelled', async () => {
     const { getByText, getByLabelText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-texture')))
     fireEvent.click(getByLabelText(t('general.skin')))
     fireEvent.click(getByText(t('general.cancel')))
-    await waitFor(() => expect(fetch.del).not.toBeCalled())
+    await waitFor(() => expect(fetch.del).not.toHaveBeenCalled())
   })
 })
 
@@ -450,12 +449,12 @@ describe('delete player', () => {
     fetch.del.mockResolvedValue({ code: 0, message: 'success' })
 
     const { getByText, getByRole, queryByText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-player')))
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(urls.user.player.delete(fixture.pid)),
+      expect(fetch.del).toHaveBeenCalledWith(urls.user.player.delete(fixture.pid)),
     )
     expect(getByText('success')).toBeInTheDocument()
     expect(getByRole('status')).toHaveClass('alert-success')
@@ -466,12 +465,12 @@ describe('delete player', () => {
     fetch.del.mockResolvedValue({ code: 1, message: 'failed' })
 
     const { getByText, getByRole, queryByText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-player')))
     fireEvent.click(getByText(t('general.confirm')))
     await waitFor(() =>
-      expect(fetch.del).toBeCalledWith(urls.user.player.delete(fixture.pid)),
+      expect(fetch.del).toHaveBeenCalledWith(urls.user.player.delete(fixture.pid)),
     )
     expect(getByText('failed')).toBeInTheDocument()
     expect(getByRole('alert')).toHaveClass('alert-danger')
@@ -480,11 +479,11 @@ describe('delete player', () => {
 
   it('cancelled', async () => {
     const { getByText, queryByText } = render(<Players />)
-    await waitFor(() => expect(fetch.get).toBeCalledTimes(1))
+    await waitFor(() => expect(fetch.get).toHaveBeenCalledTimes(1))
 
     fireEvent.click(getByText(t('user.player.delete-player')))
     fireEvent.click(getByText(t('general.cancel')))
-    await waitFor(() => expect(fetch.del).not.toBeCalled())
+    await waitFor(() => expect(fetch.del).not.toHaveBeenCalled())
     expect(queryByText(fixture.name)).toBeInTheDocument()
   })
 })

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ImageUrl;
 use Illuminate\Support\Arr;
 
 class HomeController extends Controller
@@ -14,7 +15,7 @@ class HomeController extends Controller
             ->with('transparent_navbar', (bool) option('transparent_navbar', false))
             ->with('fixed_bg', option('fixed_bg'))
             ->with('hide_intro', option('hide_intro'))
-            ->with('home_pic_url', option('home_pic_url') ?: config('options.home_pic_url'));
+            ->with('home_pic_url', ImageUrl::allowed(option('home_pic_url')) ?? config('options.home_pic_url'));
     }
 
     public function apiRoot()

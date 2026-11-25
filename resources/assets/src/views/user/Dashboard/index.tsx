@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import styled from '@emotion/styled'
-import { hot } from 'react-hot-loader/root'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
@@ -43,7 +42,7 @@ const ScoreNotice = styled.p`
 `
 
 const Dashboard: React.FC = () => {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [players, setPlayers] = useState(0)
   const [storage, setStorage] = useState(0)
   const [score, setScore] = useState(0)
@@ -60,6 +59,7 @@ const Dashboard: React.FC = () => {
     const fetchInfo = async () => {
       setLoading(true)
       const data = await fetch.get<ScoreInfo>(urls.user.score())
+      if (!data?.usage || !data.user || !data.rate) return
       setPlayers(data.usage.players)
       setStorage(data.usage.storage)
       setTweenedScore(data.user.score)
@@ -72,7 +72,7 @@ const Dashboard: React.FC = () => {
       setLoading(false)
     }
     fetchInfo()
-  }, [])
+  }, [setTweenedScore])
 
   const handleSign = useCallback(async () => {
     setLoading(true)
@@ -80,7 +80,7 @@ const Dashboard: React.FC = () => {
       fetch.ResponseBody<SignReturn>
     >(urls.user.sign())
 
-    if (code === 0) {
+    if (code === 0 && data) {
       toast.success(message)
       setLastSign(new Date())
       setTweenedScore(data.score)
@@ -91,12 +91,16 @@ const Dashboard: React.FC = () => {
         signGap,
         canSignAfterZero,
       )
-      toast.warning(scoreUtils.remainingTimeText(remainingTime))
+      toast.warning(
+        remainingTime > 0
+          ? scoreUtils.remainingTimeText(remainingTime)
+          : t('user.signUnavailable'),
+      )
     } else {
       toast.error(message)
     }
     setLoading(false)
-  }, [])
+  }, [lastSign, signGap, canSignAfterZero, setTweenedScore])
 
   return (
     <div className="card card-primary card-outline">
@@ -157,4 +161,4 @@ const Dashboard: React.FC = () => {
   )
 }
 
-export default hot(Dashboard)
+export default Dashboard

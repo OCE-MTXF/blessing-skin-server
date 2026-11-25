@@ -6,7 +6,7 @@ use App\Models\User;
 use App\Notifications;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Passport\Passport;
-use League\CommonMark\GithubFlavoredMarkdownConverter;
+use App\Services\SafeMarkdown;
 
 class NotificationsControllerTest extends TestCase
 {
@@ -102,8 +102,25 @@ class NotificationsControllerTest extends TestCase
         $id = $user->unreadNotifications->first()->id;
 
         Passport::actingAs($user, ['Notification.Read'], 'oauth');
-        $this->getJson('/api/user/notifications')
-            ->assertJson([['id' => $id, 'title' => 'title']]);
+        $authorization = ['Authorization' => 'Bearer test-fixture'];
+        $this->getJson('/api/user/notifications')->assertUnauthorized();
+        $this->getJson('/api/user/notifications', $authorization)
+            ->assertExactJson([['id' => $id, 'title' => 'title']]);
+        $url = '/api/user/notifications/'.$id;
+        $this->getJson($url, $authorization)->assertOk()->assertJsonPath('title', 'title');
+        $this->postJson($url, [], $authorization)->assertForbidden();
+        $item = $user->notifications()->findOrFail($id);
+        self::assertNull($item->read_at);
+
+        Passport::actingAs($user, ['Notification.Acknowledge'], 'oauth');
+        $this->getJson('/api/user/notifications', $authorization)->assertForbidden();
+        $this->postJson($url, [], $authorization)->assertOk();
+        self::assertNotNull($item->refresh()->read_at);
+
+        $other = User::factory()->create();
+        Passport::actingAs($other, ['Notification.Read', 'Notification.Acknowledge'], 'oauth');
+        $this->getJson($url, $authorization)->assertNotFound();
+        $this->postJson($url, [], $authorization)->assertNotFound();
     }
 
     public function testRead()
@@ -116,14 +133,16 @@ class NotificationsControllerTest extends TestCase
 
         $this->actingAs($user)->get('/user')->assertSee('Hyouka');
 
-        $converter = new GithubFlavoredMarkdownConverter();
-        $this->postJson('/user/notifications/'.$notification->id)
-            ->assertJson([
-                'title' => $notification->data['title'],
-                'content' => $converter->convert($notification->data['content'])->getContent(),
-                'time' => $notification->created_at->toDateTimeString(),
-            ]);
-        $notification->refresh();
-        $this->assertNotNull($notification->read_at);
+        $path = '/user/notifications/'.$notification->id;
+        $this->postJson($path)->assertOk()->assertJson([
+            'title' => $notification->data['title'],
+            'content' => app(SafeMarkdown::class)->render($notification->data['content']),
+            'time' => $notification->created_at->toDateTimeString(),
+        ]);
+        $readAt = $notification->refresh()->read_at;
+        self::assertNotNull($readAt);
+        $this->travel(2)->minutes();
+        $this->postJson($path)->assertOk();
+        self::assertEquals($readAt, $notification->refresh()->read_at);
     }
 }

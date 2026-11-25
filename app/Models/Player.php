@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use App\Events\PlayerProfileUpdated;
+use App\Models\Concerns\SearchString;
+use App\Services\Textures\TextureReferences;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
-use Lorisleiva\LaravelSearchString\Concerns\SearchString;
 
 /**
  * @property int     $pid
@@ -79,16 +80,19 @@ class Player extends Model
      */
     public function toJson($options = 0)
     {
-        $model = $this->model;
-        $profile = [
-            'username' => $this->name,
-            'skins' => [
-                $model => optional($this->skin)->hash,
-            ],
-            'cape' => optional($this->cape)->hash,
-        ];
+        return json_encode($this->publicProfile(app(TextureReferences::class)), $options | JSON_UNESCAPED_UNICODE);
+    }
 
-        return json_encode($profile, $options | JSON_UNESCAPED_UNICODE);
+    public function publicProfile(TextureReferences $references): array
+    {
+        $skin = $references->gameTexture($this->user, $this->skin, 'skin');
+        $cape = $references->gameTexture($this->user, $this->cape, 'cape');
+
+        return [
+            'username' => $this->name,
+            'skins' => [($skin?->model ?? 'default') => $skin?->hash],
+            'cape' => $cape?->hash,
+        ];
     }
 
     protected function serializeDate(DateTimeInterface $date)

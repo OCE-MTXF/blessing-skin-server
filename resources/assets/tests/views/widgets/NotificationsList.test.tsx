@@ -54,13 +54,22 @@ test('read notification', async () => {
   const { getByText, queryByText } = render(<NotificationsList />)
 
   fireEvent.click(getByText('hi'))
-  await waitFor(() => expect(fetch.post).toBeCalled())
-
-  expect(queryByText(fixture.title)).toBeInTheDocument()
+  await waitFor(() => expect(queryByText(fixture.title)).toBeInTheDocument())
+  expect(fetch.post).toHaveBeenCalledWith('/user/notifications/1')
   expect(queryByText(fixture.content)).toBeInTheDocument()
   expect(queryByText(fixture.time)).toBeInTheDocument()
   expect(queryByText('no unread')).toBeInTheDocument()
   expect(queryByText('1')).not.toBeInTheDocument()
 
   fireEvent.click(getByText(t('general.confirm')))
+})
+
+test('failed read leaves the notification unread', async () => {
+  createContainer([{ id: '1', title: 'pending' }])
+  fetch.post.mockResolvedValue({ code: -1, message: 'Unable to read' })
+  const { getByText, queryByText } = render(<NotificationsList />)
+  fireEvent.click(getByText('pending'))
+  await waitFor(() => expect(fetch.post).toHaveBeenCalledWith('/user/notifications/1'))
+  expect(queryByText('1')).toBeInTheDocument()
+  expect(queryByText('no unread')).not.toBeInTheDocument()
 })

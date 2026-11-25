@@ -9,18 +9,25 @@ class PluginEnableCommand extends Command
 {
     protected $signature = 'plugin:enable {name}';
 
-    protected $description = 'Enable a plugin';
+    protected $description = 'Select an offline-approved plugin for activation';
 
-    public function handle(PluginManager $plugins)
+    public function handle(PluginManager $plugins): int
     {
         $name = $this->argument('name');
         $result = $plugins->enable($name);
         if ($result === true) {
-            $plugin = $plugins->get($name);
-            $title = trans($plugin->title);
-            $this->info(trans('admin.plugins.operations.enabled', ['plugin' => $title]));
-        } elseif ($result === false) {
-            $this->warn(trans('admin.plugins.operations.not-found'));
+            $this->info(trans('admin.plugins.operations.enabled', ['plugin' => $name]));
+
+            return self::SUCCESS;
         }
+        if (is_array($result)) {
+            foreach ($plugins->formatUnresolved($result['unsatisfied'], $result['conflicts']) as $reason) {
+                $this->warn($reason);
+            }
+        } else {
+            $this->warn('Cannot enable this plugin: deployment approval or installation readiness is missing.');
+        }
+
+        return self::FAILURE;
     }
 }

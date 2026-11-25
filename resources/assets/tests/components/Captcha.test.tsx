@@ -1,65 +1,31 @@
 import React from 'react'
-import { render, fireEvent } from '@testing-library/react'
-import Reaptcha from 'reaptcha'
+import { act, render, fireEvent } from '@testing-library/react'
 import { t } from '@/scripts/i18n'
 import Captcha from '@/components/Captcha'
 
-describe('picture captcha', () => {
-  it('retrieve value', async () => {
-    const ref = React.createRef<Captcha>()
-    const { getByPlaceholderText } = render(<Captcha ref={ref} />)
-
-    fireEvent.input(getByPlaceholderText(t('auth.captcha')), {
-      target: { value: 'abc' },
-    })
-    expect(await ref.current?.execute()).toBe('abc')
-  })
-
-  it('refresh on click', async () => {
-    const spy = jest.spyOn(Date, 'now')
-
-    const ref = React.createRef<Captcha>()
-    const { getByAltText } = render(<Captcha ref={ref} />)
-
-    fireEvent.click(getByAltText(t('auth.captcha')))
-    expect(spy).toBeCalled()
-  })
-
-  it('refresh programatically', async () => {
-    const spy = jest.spyOn(Date, 'now')
-
-    const ref = React.createRef<Captcha>()
-    render(<Captcha ref={ref} />)
-
-    ref.current?.reset()
-    expect(spy).toBeCalled()
-  })
+test('renders a same-origin CAPTCHA and retrieves the code', async () => {
+  const ref = React.createRef<Captcha>()
+  const { getByPlaceholderText, getByAltText } = render(<Captcha ref={ref} />)
+  const image = getByAltText(t('auth.captcha')) as HTMLImageElement
+  expect(new URL(image.src).origin).toBe(location.origin)
+  expect(new URL(image.src).pathname).toBe('/auth/captcha')
+  fireEvent.input(getByPlaceholderText(t('auth.captcha')), { target: { value: 'abc' } })
+  await expect(ref.current?.execute()).resolves.toBe('abc')
 })
 
-describe('recaptcha', () => {
-  beforeEach(() => {
-    window.blessing.extra = { recaptcha: 'sitekey', invisible: false }
-  })
-
-  it('retrieve value', async () => {
-    window.blessing.extra.invisible = true
-    const spy = jest.spyOn(Reaptcha.prototype, 'execute')
-
-    const ref = React.createRef<Captcha>()
-    render(<Captcha ref={ref} />)
-
-    const value = await ref.current?.execute()
-    expect(spy).toBeCalled()
-    expect(value).toBe('token')
-  })
-
-  it('refresh programatically', async () => {
-    const spy = jest.spyOn(Reaptcha.prototype, 'reset')
-
-    const ref = React.createRef<Captcha>()
-    render(<Captcha ref={ref} />)
-
-    ref.current?.reset()
-    expect(spy).toBeCalled()
-  })
+test('manual and programmatic refresh replace the challenge and clear the old answer', async () => {
+  const ref = React.createRef<Captcha>()
+  const { getByAltText, getByPlaceholderText } = render(<Captcha ref={ref} />)
+  const image = getByAltText(t('auth.captcha'))
+  const field = getByPlaceholderText(t('auth.captcha'))
+  const first = image.getAttribute('src')
+  fireEvent.input(field, { target: { value: 'abc' } })
+  fireEvent.click(image)
+  const second = image.getAttribute('src')
+  expect(second).not.toBe(first)
+  await expect(ref.current?.execute()).resolves.toBe('')
+  fireEvent.input(field, { target: { value: 'def' } })
+  act(() => ref.current?.reset())
+  expect(image.getAttribute('src')).not.toBe(second)
+  expect(field).toHaveValue('')
 })

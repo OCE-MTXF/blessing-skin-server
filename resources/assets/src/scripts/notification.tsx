@@ -1,8 +1,8 @@
 import React from 'react'
-import ReactDOM from 'react-dom'
+import { createRoot } from 'react-dom/client'
 import NotificationsList from '@/views/widgets/NotificationsList'
 
 const container = document.querySelector('[data-notifications]')
 if (container) {
-  ReactDOM.render(<NotificationsList />, container)
+  createRoot(container).render(<NotificationsList />)
 }

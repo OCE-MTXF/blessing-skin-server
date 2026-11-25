@@ -37,14 +37,18 @@ test('display texture name rule', () => {
   expect(queryByPlaceholderText('rule')).toBeInTheDocument()
 })
 
-test('content policy', () => {
-  const { queryByText } = render(<Upload />)
-  expect(queryByText('the policy')).toBeInTheDocument()
+test('content policy retains safe formatting without link attributes', () => {
+  blessing.extra.contentPolicy =
+    '<strong>the policy</strong><a href="/help">policy help</a>'
+  const { getByText } = render(<Upload />)
+  expect(getByText('the policy').tagName).toBe('STRONG')
+  expect(getByText('policy help')).not.toHaveAttribute('href')
 })
 
 test('privacy notice', () => {
   const { getByLabelText, queryByText } = render(<Upload />)
   fireEvent.click(getByLabelText(t('skinlib.upload.set-as-private')))
+  expect(queryByText(t('skinlib.upload.privacy-notice'))).toBeInTheDocument()
   expect(queryByText('privacy notice')).toBeInTheDocument()
 })
 
@@ -207,7 +211,7 @@ describe('upload texture', () => {
     fireEvent.click(getByText(t('skinlib.upload.button')))
 
     expect(queryByText(t('skinlib.uploading'))).toBeInTheDocument()
-    expect(fetch.post).toBeCalledWith(
+    expect(fetch.post).toHaveBeenCalledWith(
       urls.texture.upload(),
       expect.any(FormData),
     )
@@ -231,7 +235,7 @@ describe('upload texture', () => {
     fireEvent.click(getByLabelText(t('skinlib.upload.set-as-private')))
     fireEvent.click(getByText(t('skinlib.upload.button')))
 
-    await waitFor(() => expect(fetch.post).toBeCalled())
+    await waitFor(() => expect(fetch.post).toHaveBeenCalled())
     const formData = fetch.post.mock.calls[0]![1] as FormData
     expect(formData.get('public')).toBe('0')
   })
@@ -247,7 +251,7 @@ describe('upload texture', () => {
     })
     fireEvent.click(getByText(t('skinlib.upload.button')))
 
-    await waitFor(() => expect(fetch.post).toBeCalled())
+    await waitFor(() => expect(fetch.post).toHaveBeenCalled())
     expect(queryByText('dup')).toBeInTheDocument()
 
     fireEvent.click(getByText(t('user.viewInSkinlib')))
@@ -264,7 +268,7 @@ describe('upload texture', () => {
     })
     fireEvent.click(getByText(t('skinlib.upload.button')))
 
-    await waitFor(() => expect(fetch.post).toBeCalled())
+    await waitFor(() => expect(fetch.post).toHaveBeenCalled())
     expect(queryByText('failed')).toBeInTheDocument()
     expect(getByRole('alert')).toHaveClass('alert-danger')
   })

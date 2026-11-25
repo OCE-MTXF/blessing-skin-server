@@ -21,7 +21,7 @@ describe('submit', () => {
     })
     fireEvent.click(getByText(t('auth.send')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.forgot(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.auth.forgot(), {
         email: 'a@b.c',
         captcha: 'abc',
       }),
@@ -42,7 +42,7 @@ describe('submit', () => {
     })
     fireEvent.click(getByText(t('auth.send')))
     await waitFor(() =>
-      expect(fetch.post).toBeCalledWith(urls.auth.forgot(), {
+      expect(fetch.post).toHaveBeenCalledWith(urls.auth.forgot(), {
         email: 'a@b.c',
         captcha: 'abc',
       }),

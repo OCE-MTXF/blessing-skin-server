@@ -11,9 +11,9 @@ test('add listener and emit event', () => {
 
   emitter.emit('a')
 
-  expect(mockA1).toBeCalledTimes(1)
-  expect(mockA2).toBeCalledTimes(1)
-  expect(mockB).not.toBeCalled()
+  expect(mockA1).toHaveBeenCalledTimes(1)
+  expect(mockA2).toHaveBeenCalledTimes(1)
+  expect(mockB).not.toHaveBeenCalled()
 })
 
 test('not throw for un-existed event', () => {
@@ -26,5 +26,5 @@ test('unsubscribe event', () => {
   const off = emitter.on('c', mock)
   off()
 
-  expect(mock).not.toBeCalled()
+  expect(mock).not.toHaveBeenCalled()
 })

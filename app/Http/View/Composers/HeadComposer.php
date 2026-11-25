@@ -2,11 +2,11 @@
 
 namespace App\Http\View\Composers;
 
+use App\Services\ImageUrl;
 use Blessing\Filter;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class HeadComposer
@@ -39,9 +39,8 @@ class HeadComposer
 
     public function addFavicon(View $view)
     {
-        $url = option('favicon_url', config('options.favicon_url'));
-        $url = Str::startsWith($url, 'http') ? $url : url($url);
-        $view->with('favicon', $url);
+        $url = ImageUrl::allowed(option('favicon_url')) ?? config('options.favicon_url');
+        $view->with('favicon', url($url));
     }
 
     public function applyThemeColor(View $view)
@@ -73,7 +72,6 @@ class HeadComposer
         $view->with('seo', [
             'keywords' => option('meta_keywords'),
             'description' => option('meta_description'),
-            'extra' => option('meta_extras'),
         ]);
     }
 
@@ -82,8 +80,6 @@ class HeadComposer
         $links = [];
         $links = $this->filter->apply('head_links', $links);
         $view->with('links', $links);
-        $view->with('inline_css', option('custom_css'));
-        $view->with('custom_cdn_host', option('cdn_address'));
     }
 
     public function addExtra(View $view)

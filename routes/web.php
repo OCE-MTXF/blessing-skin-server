@@ -26,23 +26,22 @@ Route::prefix('auth')->name('auth.')->group(function () {
 
         Route::get('forgot', 'AuthController@forgot')->name('forgot');
         Route::post('forgot', 'AuthController@handleForgot')->name('handle.forgot');
-
-        Route::get('reset/{uid}', 'AuthController@reset')->name('reset');
-        Route::post('reset/{uid}', 'AuthController@handleReset')->name('handle.reset');
     });
 
-    Route::post('logout', 'AuthController@logout')->name('logout')->middleware('authorize');
-    Route::any('captcha', 'AuthController@captcha')->name('captcha');
+    Route::get('reset/{uid}', 'AuthController@reset')->whereNumber('uid')->name('reset');
+    Route::post('reset/{uid}', 'AuthController@handleReset')->whereNumber('uid')->name('handle.reset');
+    Route::post('logout', 'AuthController@logout')->name('logout')->middleware('auth:web');
+    Route::get('captcha', 'AuthController@captcha')->name('captcha');
 
-    Route::middleware(['authorize', Middleware\EnsureEmailFilled::class])
+    Route::middleware(['auth:web', Middleware\RejectBannedUser::class, Middleware\EnsureEmailFilled::class])
         ->name('bind.')
         ->group(function () {
             Route::view('bind', 'auth.bind')->name('view');
             Route::post('bind', 'AuthController@fillEmail')->name('verify');
         });
 
-    Route::get('verify/{user}', 'AuthController@verify')->name('verify');
-    Route::post('verify/{user}', 'AuthController@handleVerify')->name('handle.verify');
+    Route::get('verify/{user}', 'AuthController@verify')->whereNumber('user')->name('verify');
+    Route::post('verify/{user}', 'AuthController@handleVerify')->whereNumber('user')->name('handle.verify');
 });
 
 Route::prefix('user')
@@ -50,7 +49,7 @@ Route::prefix('user')
     ->middleware(['authorize'])
     ->group(function () {
         Route::get('', 'UserController@index')->name('home');
-        Route::post('notifications/{id}', 'NotificationsController@read')->name('notification.read');
+        Route::post('notifications/{id}', 'NotificationsController@read')->whereUuid('id')->name('notification.read');
         Route::get('score-info', 'UserController@scoreInfo')->name('score');
         Route::post('sign', 'UserController@sign')->name('sign');
 
@@ -95,7 +94,7 @@ Route::prefix('user')
 Route::prefix('texture')->name('texture.')->group(function () {
     Route::get('{texture}', 'SkinlibController@info')->name('info');
     Route::middleware(['authorize', 'verified'])->group(function () {
-        Route::post('', 'SkinlibController@handleUpload')->name('upload');
+        Route::post('', 'SkinlibController@handleUpload')->middleware('throttle:asset-upload')->name('upload');
         Route::prefix('{texture}')->group(function () {
             Route::put('type', 'SkinlibController@type')->name('type');
             Route::put('name', 'SkinlibController@rename')->name('name');
@@ -119,16 +118,17 @@ Route::prefix('skinlib')->name('skinlib.')->group(function () {
 
 Route::prefix('admin')
     ->name('admin.')
-    ->middleware(['authorize', 'role:admin'])
+    ->middleware(['authorize', 'verified', 'role:admin'])
     ->group(function () {
         Route::get('', 'AdminController@index')->name('view');
         Route::get('chart', 'AdminController@chartData')->name('chart');
-        Route::post('notifications/send', 'NotificationsController@send')->name('notification.send');
+        Route::post('notifications/send', 'NotificationsController@send')->middleware('throttle:broadcast')->name('notification.send');
 
-        Route::any('customize', 'OptionsController@customize')->name('customize');
-        Route::any('score', 'OptionsController@score')->name('score');
-        Route::any('options', 'OptionsController@options')->name('options');
-        Route::any('resource', 'OptionsController@resource')->name('resource');
+        Route::match(['get', 'post'], 'customize', 'OptionsController@customize')->name('customize');
+        Route::match(['get', 'post'], 'score', 'OptionsController@score')->name('score');
+        Route::match(['get', 'post'], 'options', 'OptionsController@options')->name('options');
+        Route::match(['get', 'post'], 'resource', 'OptionsController@resource')->name('resource');
+        Route::post('resource/cache', 'OptionsController@clearResourceCache')->name('resource.cache');
 
         Route::get('status', 'AdminController@status')->name('status');
 
@@ -168,7 +168,7 @@ Route::prefix('admin')
             Route::get('list', 'ReportController@manage')->name('list');
         });
 
-        Route::prefix('i18n')->name('i18n.')->group(function () {
+        Route::prefix('i18n')->name('i18n.')->middleware('role:super-admin')->group(function () {
             Route::view('', 'admin.i18n')->name('view');
             Route::get('list', 'TranslationsController@list')->name('list');
             Route::post('', 'TranslationsController@create')->name('create');
@@ -180,35 +180,18 @@ Route::prefix('admin')
             Route::get('data', 'PluginController@getPluginData')->name('data');
 
             Route::view('manage', 'admin.plugins')->name('view');
-            Route::post('manage', 'PluginController@manage')->name('view');
-            Route::any('config/{name}', 'PluginController@config')->name('config');
             Route::get('readme/{name}', 'PluginController@readme')->name('readme');
             Route::middleware('role:super-admin')->group(function () {
-                Route::post('upload', 'PluginController@upload')->name('upload');
-                Route::post('wget', 'PluginController@wget')->name('wget');
+                Route::post('manage', 'PluginController@manage')->name('manage');
+                Route::match(['get', 'post'], 'config/{name}', 'PluginController@config')->name('config');
             });
 
             Route::prefix('market')->name('market.')->group(function () {
                 Route::view('', 'admin.market')->name('view');
                 Route::get('list', 'MarketController@marketData')->name('list');
-                Route::post('download', 'MarketController@download')->name('download');
             });
         });
-
-        Route::prefix('update')->name('update.')->middleware('role:super-admin')->group(function () {
-            Route::get('', 'UpdateController@showUpdatePage')->name('view');
-            Route::post('download', 'UpdateController@download')->name('download');
-        });
     });
-
-Route::prefix('setup')->name('setup.')->group(function () {
-    Route::middleware('setup')->group(function () {
-        Route::view('', 'setup.wizard.welcome')->name('view');
-        Route::any('database', 'SetupController@database')->name('database');
-        Route::view('info', 'setup.wizard.info')->name('info');
-        Route::post('finish', 'SetupController@finish')->name('finish');
-    });
-});
 
 Route::prefix('.well-known')->group(function () {
     Route::redirect('change-password', '/user/profile');

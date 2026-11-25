@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import * as fetch from '@/scripts/net'
 import { showModal } from '@/scripts/notify'
+import SafeMarkdown from '@/components/SafeMarkdown'
 
 export type Notification = {
   id: string
@@ -23,23 +24,25 @@ const NotificationsList: React.FC = () => {
   }, [])
 
   const read = async (id: string) => {
-    const { title, content, time } = await fetch.post<{
+    const result = await fetch.post<{
       title: string
       content: string
       time: string
-    }>(`/user/notifications/${id}`)
+    }>(`/user/notifications/${encodeURIComponent(id)}`)
+    if (!result || typeof result.content !== 'string') return
+    const { title, content, time } = result
 
-    showModal({
+    void showModal({
       mode: 'alert',
       title,
       children: (
         <>
-          <div dangerouslySetInnerHTML={{ __html: content }}></div>
+          <SafeMarkdown html={content} />
           <br />
           <small>{time}</small>
         </>
       ),
-    })
+    }).catch(() => undefined)
     setNotifications((notifications) =>
       notifications.filter((notification) => notification.id !== id),
     )
@@ -60,18 +63,20 @@ const NotificationsList: React.FC = () => {
       <div className="dropdown-menu dropdown-menu-lg dropdown-menu-right">
         {hasUnread ? (
           notifications.map((notification) => (
-            <>
+            <React.Fragment key={notification.id}>
               <a
                 href="#"
                 className="dropdown-item"
-                key={notification.id}
-                onClick={() => read(notification.id)}
+                onClick={(event) => {
+                  event.preventDefault()
+                  void read(notification.id)
+                }}
               >
                 <i className="far fa-circle text-info mr-2"></i>
                 {notification.title}
               </a>
               <div className="dropdown-divider"></div>
-            </>
+            </React.Fragment>
           ))
         ) : (
           <p className="text-center text-muted pt-2 pb-2">{noUnreadText}</p>

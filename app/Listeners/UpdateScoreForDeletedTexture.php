@@ -21,8 +21,7 @@ class UpdateScoreForDeletedTexture
                 $ret -= (int) option('score_award_per_texture', 0);
             }
 
-            $uploader->score += $ret;
-            $uploader->save();
+            $uploader->increment('score', $ret);
         }
     }
 }

@@ -6,6 +6,16 @@ import Reset from '@/views/auth/Reset'
 
 jest.mock('@/scripts/net')
 
+const resetPath = '/auth/reset/42?token=test-fixture'
+beforeEach(() => {
+  blessing.base_url = `${location.origin}/site`
+  history.replaceState(null, '', `/site${resetPath}#discarded`)
+})
+afterEach(() => {
+  blessing.base_url = ''
+  history.replaceState(null, '', '/')
+})
+
 test('confirmation is not matched', () => {
   const { getByText, getByPlaceholderText, queryByText } = render(<Reset />)
 
@@ -18,7 +28,7 @@ test('confirmation is not matched', () => {
   fireEvent.click(getByText(t('auth.reset')))
 
   expect(queryByText(t('auth.invalidConfirmPwd'))).toBeInTheDocument()
-  expect(fetch.post).not.toBeCalled()
+  expect(fetch.post).not.toHaveBeenCalled()
 })
 
 test('succeeded', async () => {
@@ -35,8 +45,8 @@ test('succeeded', async () => {
   })
   fireEvent.click(getByText(t('auth.reset')))
   await waitFor(() =>
-    expect(fetch.post).toBeCalledWith(
-      location.href.replace(blessing.base_url, ''),
+    expect(fetch.post).toHaveBeenCalledWith(
+      resetPath,
       { password: 'password' },
     ),
   )
@@ -57,8 +67,8 @@ test('failed', async () => {
   })
   fireEvent.click(getByText(t('auth.reset')))
   await waitFor(() =>
-    expect(fetch.post).toBeCalledWith(
-      location.href.replace(blessing.base_url, ''),
+    expect(fetch.post).toHaveBeenCalledWith(
+      resetPath,
       { password: 'password' },
     ),
   )

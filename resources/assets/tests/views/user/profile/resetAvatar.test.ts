@@ -11,10 +11,10 @@ test('reset avatar', async () => {
   document.body.innerHTML = '<img alt="User Image" src="a">'
 
   await resetAvatar()
-  expect(post).not.toBeCalled()
+  expect(post).not.toHaveBeenCalled()
 
   await resetAvatar()
-  expect(post).toBeCalledWith('/user/profile/avatar', { tid: 0 })
-  expect(toast.success).toBeCalledWith('ok')
+  expect(post).toHaveBeenCalledWith('/user/profile/avatar', { tid: 0 })
+  expect(toast.success).toHaveBeenCalledWith('ok')
   expect(document.querySelector('img')!.src).toBe('/avatar/0')
 })

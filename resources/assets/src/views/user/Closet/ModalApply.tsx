@@ -42,6 +42,10 @@ const ModalApply: React.FC<Props> = (props) => {
   }
 
   const handleSelect = async (player: Player) => {
+    if (!props.show || (!props.skin && !props.cape)) {
+      return
+    }
+
     const { code, message } = await fetch.put<fetch.ResponseBody>(
       urls.user.player.set(player.pid),
       {

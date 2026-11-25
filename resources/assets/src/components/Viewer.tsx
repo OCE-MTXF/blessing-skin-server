@@ -20,6 +20,7 @@ const backgrounds = [bg1, bg2, bg3, bg4, bg5, bg6, bg7]
 export const PICTURES_COUNT = backgrounds.length
 
 interface Props {
+  children?: React.ReactNode
   skin?: string
   cape?: string
   isAlex: boolean

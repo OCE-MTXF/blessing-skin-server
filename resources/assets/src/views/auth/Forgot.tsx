@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react'
-import { hot } from 'react-hot-loader/root'
 import useEmitMounted from '@/scripts/hooks/useEmitMounted'
 import { t } from '@/scripts/i18n'
 import * as fetch from '@/scripts/net'
@@ -31,8 +30,8 @@ const Forgot: React.FC = () => {
       setSuccessMessage(message)
     } else {
       setWarningMessage(message)
-      ref.current!.reset()
     }
+    ref.current?.reset()
     setIsSending(false)
   }
 
@@ -71,4 +70,4 @@ const Forgot: React.FC = () => {
   )
 }
 
-export default hot(Forgot)
+export default Forgot

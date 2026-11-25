@@ -17,6 +17,24 @@ $app = new Illuminate\Foundation\Application(
 
 /*
 |--------------------------------------------------------------------------
+| Honour The Deployment Storage Directory
+|--------------------------------------------------------------------------
+|
+| The pinned runtime images keep every writable path outside the code tree
+| and point LARAVEL_STORAGE_PATH at that directory. Bind it so cache, logs,
+| sessions and compiled views stay on the mounted state volume instead of a
+| storage/ directory that the runtime image never copies.
+|
+*/
+
+$storagePath = $_ENV['LARAVEL_STORAGE_PATH'] ?? $_SERVER['LARAVEL_STORAGE_PATH'] ?? getenv('LARAVEL_STORAGE_PATH');
+
+if (is_string($storagePath) && $storagePath !== '') {
+    $app->useStoragePath($storagePath);
+}
+
+/*
+|--------------------------------------------------------------------------
 | Bind Important Interfaces
 |--------------------------------------------------------------------------
 |

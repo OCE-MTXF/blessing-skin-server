@@ -50,7 +50,7 @@
     ]
   },
   "autoload-dev": {
-    "classmap": ["tests/TestCase.php", "tests/BrowserKitTestCase.php"]
+    "classmap": ["tests/"]
   },
   "scripts": {
     "test": "phpunit",

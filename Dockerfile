@@ -9,9 +9,16 @@ RUN set -eux; \
       > /etc/apt/sources.list; \
     apt-get -o Acquire::Retries=3 update; \
     apt-get install -y --no-install-recommends libpng-dev libjpeg62-turbo-dev libwebp-dev libfreetype6-dev libicu-dev libzip-dev libpq-dev libonig-dev; \
-    docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
     if ! php -r 'exit(extension_loaded("mbstring") ? 0 : 1);'; then docker-php-ext-install -j"$(nproc)" mbstring; fi; \
-    docker-php-ext-install -j"$(nproc)" gd intl zip pdo_mysql pdo_pgsql pcntl; \
+    docker-php-ext-install -j"$(nproc)" intl zip pdo_mysql pdo_pgsql pcntl; \
+    docker-php-source extract; \
+    ( cd /usr/src/php/ext/gd; \
+      phpize; \
+      ./configure --with-php-config=/usr/local/bin/php-config --with-freetype --with-jpeg --with-webp; \
+      make -j"$(nproc)"; \
+      make install ); \
+    docker-php-ext-enable gd; \
+    docker-php-source delete; \
     rm "$PHP_INI_DIR/conf.d/docker-php-ext-pcntl.ini"; \
     php -d extension=pcntl -r 'exit(extension_loaded("pcntl") ? 0 : 1);'; \
     rm -rf /var/lib/apt/lists/*; \

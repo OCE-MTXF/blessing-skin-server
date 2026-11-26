@@ -61,4 +61,5 @@ When reporting a problem, include the version, deployment topology and a minimal
 
 MIT License
 
-Copyright (c) 2016-present The Blessing Skin Team
+Thanks to the Blessing Skin Server team.
+Thank you for your source code.

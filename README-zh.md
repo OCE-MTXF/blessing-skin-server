@@ -61,6 +61,7 @@ Blessing Skin 可支持多种语言，当前支持英语、简体中文和西班
 
 MIT License
 
-Copyright (c) 2016-present The Blessing Skin Team
+感谢Blessing skin server 团队。
+感谢你们的源代码。
 
 程序原作者为 [@printempw](https://printempw.github.io/)，转载请注明。

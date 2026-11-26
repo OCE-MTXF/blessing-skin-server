@@ -59,7 +59,14 @@ When reporting a problem, include the version, deployment topology and a minimal
 
 ## Copyright & License
 
-MIT License
+MIT License. See [LICENSE](LICENSE) for the full text.
+
+Copyright (c) 2016-present The Blessing Skin Team — upstream Blessing Skin Server.
+
+Copyright (c) 2026 OCE_MTXF — PHP 8.6 downstream maintenance changes.
+
+This is a downstream maintenance release, not an upstream release. It is not
+affiliated with or endorsed by the upstream team.
 
 Thanks to the Blessing Skin Server team.
 Thank you for your source code.

@@ -59,7 +59,13 @@ Blessing Skin 可支持多种语言，当前支持英语、简体中文和西班
 
 ## 版权
 
-MIT License
+MIT License，完整文本见 [LICENSE](LICENSE)。
+
+Copyright (c) 2016-present The Blessing Skin Team —— 上游 Blessing Skin Server。
+
+Copyright (c) 2026 OCE_MTXF —— PHP 8.6 下游维护改动。
+
+本版本是下游维护版，不是上游发行版，与上游团队无从属关系，也不代表上游团队的认可。
 
 感谢Blessing skin server 团队。
 感谢你们的源代码。

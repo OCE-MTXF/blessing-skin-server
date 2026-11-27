@@ -193,6 +193,7 @@ admin:
   pluginReadme: 自述
   pluginDescription: 描述資訊
   pluginDependencies: 依賴項
+  pluginMarketUnavailable: 插件安裝功能暫不可用：目前版本未啟用插件市場資料來源，也沒有開放的安裝通道。
   installPlugin: 安裝
   pluginInstalling: 安裝中...
   updatePlugin: 更新

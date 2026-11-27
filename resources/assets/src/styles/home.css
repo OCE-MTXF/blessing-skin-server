@@ -124,3 +124,140 @@ body {
   width: 100%;
   padding: 16px 50px;
 }
+
+/* --------------------------------------------------------------------------
+ * Phones and small tablets. Appended last so these rules win over the
+ * desktop layout above (home-css loads after the shared style bundle).
+ * -------------------------------------------------------------------------- */
+
+@media (max-width: 991.98px) {
+  /* One-row navbar: never wrap, truncate the pixel-font brand. */
+  .navbar {
+    flex-wrap: nowrap;
+  }
+
+  .navbar > .container {
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .navbar-brand {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 50vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1.05rem;
+    margin-right: 0.25rem;
+  }
+
+  .navbar-nav {
+    flex-wrap: nowrap;
+  }
+
+  .navbar-nav .nav-link {
+    white-space: nowrap;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* The hero is a fixed-height canvas on desktop. On phones let it size to
+     its content so the call to action never sits in an empty band. */
+  .layout-top-nav > .hp-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .hp-wrapper > .container {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    padding-top: 5.5rem;
+    padding-bottom: 2.5rem;
+  }
+
+  .splash {
+    position: static;
+    width: 100%;
+    height: auto;
+    margin: 0;
+  }
+
+  .splash-head {
+    font-size: 1.9rem;
+    padding: 0.4em 0 0.6em;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  .splash-subhead {
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    margin-bottom: 2rem;
+  }
+
+  .main-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.7em 1.6em;
+    font-size: 1.05rem;
+  }
+
+  #intro {
+    padding: 2.5rem 0 1rem;
+  }
+
+  #intro h1 {
+    font-size: 1.6rem;
+  }
+
+  #intro i {
+    font-size: 3.25rem;
+  }
+
+  #intro .row > [class*='col-'] {
+    flex: 0 0 100%;
+    max-width: 100%;
+    margin-bottom: 2rem;
+  }
+
+  #intro .row > [class*='col-']:last-child {
+    margin-bottom: 0;
+  }
+
+  #footer-wrap {
+    padding: 2rem 0;
+    text-align: center;
+  }
+
+  #footer-wrap .row > [class*='col-'] {
+    flex: 0 0 100%;
+    max-width: 100%;
+    margin-bottom: 1rem;
+  }
+
+  #copyright.without-intro {
+    position: static;
+    padding: 1rem 0;
+  }
+
+  #copyright {
+    font-size: 0.85rem;
+    text-align: center;
+  }
+}
+
+@media (max-width: 359.98px) {
+  .splash-head {
+    font-size: 1.6rem;
+  }
+}

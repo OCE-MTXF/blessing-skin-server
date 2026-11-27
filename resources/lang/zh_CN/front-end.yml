@@ -198,6 +198,7 @@ admin:
   pluginReadme: 说明
   pluginDescription: 描述
   pluginDependencies: 依赖关系
+  pluginMarketUnavailable: 插件安装功能暂不可用：当前版本未启用插件市场数据源，也没有开放的安装通道。若需启用插件，请由管理员按插件策略离线审核后配置。
   installPlugin: 安装
   pluginInstalling: 正在安装...
   updatePlugin: 更新

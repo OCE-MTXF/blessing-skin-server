@@ -116,7 +116,10 @@ test('shows an empty read-only catalog when no entries are available', async () 
 
   render(<PluginsMarket />)
 
-  expect(await screen.findByText(t('general.noResult'))).toBeInTheDocument()
+  expect(
+    await screen.findByText(t('admin.pluginMarketUnavailable')),
+  ).toBeInTheDocument()
+  expect(screen.queryByText(t('general.noResult'))).not.toBeInTheDocument()
   expect(screen.queryByRole('table')).not.toBeInTheDocument()
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
 })

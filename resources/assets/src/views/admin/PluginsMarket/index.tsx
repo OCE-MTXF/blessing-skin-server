@@ -65,6 +65,10 @@ const PluginsMarket: React.FC = () => {
         <div className="card-body">
           <Loading />
         </div>
+      ) : plugins.length === 0 ? (
+        <div className="card-body text-center text-muted">
+          {t('admin.pluginMarketUnavailable')}
+        </div>
       ) : searchedPlugins.length === 0 ? (
         <div className="card-body text-center">{t('general.noResult')}</div>
       ) : (

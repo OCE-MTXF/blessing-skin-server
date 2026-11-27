@@ -1,0 +1,241 @@
+/*
+ * Mobile / small-screen refinements.
+ *
+ * Loaded last from common.css so these rules win over AdminLTE defaults.
+ * Scope: phones and small tablets (<= 991.98px), with the densest tuning
+ * below 768px. Nothing here is required for the desktop layout to work.
+ */
+
+/* --------------------------------------------------------------------------
+ * Global
+ * -------------------------------------------------------------------------- */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Touch targets: keep interactive controls at or above 44px on touch screens. */
+@media (pointer: coarse) {
+  .btn,
+  .nav-link,
+  .dropdown-item,
+  .page-link,
+  .form-control,
+  .custom-select {
+    min-height: 44px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Top navigation bars (home, skin library, user centre header)
+ * -------------------------------------------------------------------------- */
+
+@media (max-width: 991.98px) {
+  /* Never let the header grow tall: one row, no wrapping. */
+  .navbar {
+    flex-wrap: nowrap;
+  }
+
+  .navbar > .container,
+  .navbar > .container-fluid {
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* The brand uses a wide pixel font; keep it on one line and truncate. */
+  .navbar-brand,
+  .brand-link {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 50vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1.05rem;
+    margin-right: 0.25rem;
+  }
+
+  .navbar-nav {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+
+  .navbar-nav .nav-link {
+    white-space: nowrap;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+
+  /* Secondary navigation and custom menus shrink to icons before text. */
+  .navbar-custom-menu,
+  .navbar-custom-menu > .navbar-nav {
+    flex-wrap: nowrap;
+  }
+
+  .navbar-custom-menu > .navbar-nav > .nav-item > .nav-link > span {
+    display: none;
+  }
+
+  /* Skin-library style navbars keep their primary links visible inside a
+     horizontally scrollable strip instead of wrapping the header taller. */
+  .navbar .navbar-collapse {
+    display: flex !important;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .navbar .navbar-collapse::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 575.98px) {
+  /* On phones the in-nav "skin library" text is the first thing to drop;
+     the hamburger and the icons carry the navigation. */
+  .navbar .navbar-collapse .nav-link:not(.dropdown-toggle) > span,
+  .navbar .navbar-nav > .nav-item:not(.dropdown):not(.user-menu) .nav-link {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
+
+  .navbar-brand {
+    max-width: 42vw;
+    font-size: 1rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Authentication pages (login, register, forgot, reset)
+ * -------------------------------------------------------------------------- */
+
+@media (max-width: 575.98px) {
+  body.login-page {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 1rem 0;
+  }
+
+  .login-page .login-box {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0 0.75rem;
+  }
+
+  /* The logo block is the widest text on the page; scale it with the viewport. */
+  .login-page .login-logo {
+    padding: 0.75rem 0.25rem 1.25rem;
+    font-size: 1.5rem;
+    line-height: 1.3;
+    word-break: break-word;
+  }
+
+  .login-page .login-logo a {
+    font-size: inherit;
+  }
+
+  .login-page .card {
+    margin: 0;
+    border-radius: 0.35rem;
+    box-shadow: none;
+  }
+
+  .login-page .login-card-body {
+    padding: 1.25rem 1rem;
+  }
+
+  .login-page .input-group > .form-control {
+    min-width: 0;
+  }
+
+  .login-page .input-group-text {
+    min-width: 44px;
+    justify-content: center;
+  }
+
+  .login-page .btn {
+    min-height: 44px;
+  }
+
+  /* Remember-me / forgot-password row keeps breathing room when it wraps. */
+  .login-page .row .col-8,
+  .login-page .row .col-4 {
+    flex: 0 0 auto;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Content pages (skin library, user centre, admin)
+ * -------------------------------------------------------------------------- */
+
+@media (max-width: 767.98px) {
+  .content-header {
+    padding: 12px 0 0;
+  }
+
+  .content-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .content {
+    padding-top: 0.75rem;
+  }
+
+  .card-body {
+    padding: 0.9rem;
+  }
+
+  .card-header,
+  .card-footer {
+    padding: 0.6rem 0.9rem;
+  }
+
+  /* Wide data tables scroll inside their card instead of stretching the page. */
+  .table-responsive {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-responsive > .table {
+    min-width: 34rem;
+  }
+
+  /* Skin library / closet tiles: two comfortable columns on phones. */
+  .bs-skinlib-row > [class*='col-'] {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Small phones
+ * -------------------------------------------------------------------------- */
+
+@media (max-width: 359.98px) {
+  .splash-head {
+    font-size: 1.6rem;
+  }
+
+  .login-page .login-logo {
+    font-size: 1.25rem;
+  }
+}

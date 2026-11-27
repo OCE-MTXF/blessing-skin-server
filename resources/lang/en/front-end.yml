@@ -201,6 +201,7 @@ admin:
   pluginReadme: Read Me
   pluginDescription: Description
   pluginDependencies: Dependencies
+  pluginMarketUnavailable: 'Plugin installation is currently unavailable: this build ships without a plugin market source or an installation channel.'
   installPlugin: Install
   pluginInstalling: Installing...
   updatePlugin: Update

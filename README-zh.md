@@ -1,7 +1,7 @@
 - **简体中文**
 - [English](./README.md)
 
-# Blessing Skin 6.0.3 · PHP 8.6
+# Blessing Skin 6.0.4 · PHP 8.6
 
 这是从 [Blessing Skin](https://github.com/bs-community/blessing-skin-server) 6.0.2 派生的 PHP 8.6 安全维护版本，不是上游官方发布。
 

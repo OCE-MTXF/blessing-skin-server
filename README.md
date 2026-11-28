@@ -1,7 +1,7 @@
 - [简体中文](./README-zh.md)
 - **English**
 
-# Blessing Skin 6.0.3 · PHP 8.6
+# Blessing Skin 6.0.4 · PHP 8.6
 
 A downstream PHP 8.6 security maintenance release based on [Blessing Skin](https://github.com/bs-community/blessing-skin-server) 6.0.2, not an upstream release.
 
